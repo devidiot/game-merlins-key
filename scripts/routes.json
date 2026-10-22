@@ -1,0 +1,14 @@
+{
+  "1": "walk-R walk-R walk-R walk-R walk-R walk-R cast-L jump-L1 jumpLate-L cast-R jump-R1 cast-R jump-R1 jump-R3 walk-R walk-R",
+  "2": "walk-R walk-R walk-R walk-R walk-R walk-R walk-R jump jump jump walk-R walk-R walk-R walk-R jumpLate-R walk-L jump-L2 walk-L jump-L2 walk-L jump-L2 walk-L walk-L walk-L",
+  "3": "jump-R3 jump-R1 crouch-R jump-R3 jump-R1 cast-R jump-R1 crouch-L walk-L jump jump-L3 jump-R1 jumpLate-L cast-L jump-L1 cast-R cast-L jump-L1 jump-R2 cast-R jump-R1 jump-L3",
+  "4": "walk-R walk-R walk-R walk-R walk-R walk-R walk-R walk-R walk-R jump-R1 walk-R walk-R walk-R center cast-L jump-L1 center cast-L jump-L1 center jumpLate-L walk-L walk-L walk-L walk-L walk-L center cast-L jump-L1 center cast-R jump-R1 center jump-L2 walk-L walk-L walk-R walk-R walk-R jump-R1 walk-R walk-R walk-R walk-R walk-R walk-R walk-R walk-R walk-R",
+  "5": "walk-R walk-R walk-R cast-R jump-R1 jumpLate-R walk-R cast-R jump-R1 cast-R jump-R1 crouch-R walk-R jump-R1 jumpLate-L jump-R2 walk-R walk-R",
+  "6": "jump-R3 jump-R3 jump-R3 cast-R jump-R2 jumpLate-L cast-R jump-R1 crouch-L walk-L cast-R jump-R1 jump-L2 cast-L jump-L2 jump-R3 jump-R3 jump-L2 walk-R",
+  "7": "jump-R3 jump-R3 cast-L jump-L1 crouch-R walk-R cast-L jump-L1 jump-R2 cast-L jump-L2 jumpLate-R jump jump-L2 walk-R jump-R3 walk-R",
+  "8": "cast-R jump-R1 crouch-L walk-L cast-R jump-R1 cast-R jump-R1 cast-R jump-R1 jump-L3 walk-R jump-R3 jump-R3 jump-R2 jump-R2",
+  "9": "jump-R3 jump-R3 jump-R3 jump-R2 cast-R jump-R1 cast-R jump-R1 jumpLate-L cast-R jump-R1 crouch-L walk-L cast-L jump-L1 crouch-R walk-R jump jump walk-L jump-L3 walk-R",
+  "10": "walk-R walk-R walk-R walk-R walk-R walk-R walk-R walk-R walk-R center cast-R walk-R walk-R center cast-R jump-R1 center cast-L jump-L1 center jumpLate-L walk-L walk-L center cast-L jump-L1 center jumpLate-L center cast-R jump-R1 center cast-R jump-R1 center jump-R3 walk-R walk-R",
+  "11": "jump-R3 jump-R3 jump-R3 jump-R3 jump-L2 jump-L3 walk-L cast-R jump-R1 jump-L2 cast-L jump-L1 jump-R3",
+  "12": "jump-R3 jump-R3 walk-R walk-R jumpLate-R jump-L1 jump-R1 jump-L3 jump-L3 jump-L2 cast-R jump-R2 crouch-R crouch-L jump-R1 jump-L3 walk-L cast-L jump-L1 crouch-R walk-R cast-L jump-L1 crouch-R walk-R cast-L jump-L1 crouch-R walk-R cast-R jump-R1 cast-R jump-R1 jump-L3"
+}
