@@ -1,0 +1,19 @@
+{
+  "name": "merlins-key",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Merlin's Key — 마법으로 돌 블록을 만들고 부수며 열쇠를 찾는 퍼즐 액션 (PWA)",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "npm run check && tsc --noEmit && vite build && node scripts/precache-sw.mjs",
+    "check": "node scripts/check-levels.mjs && node scripts/solve-levels.mjs --verify",
+    "preview": "vite preview --host",
+    "icons": "node scripts/make-icons.mjs",
+    "deploy": "npm run build && node scripts/deploy-pages.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
