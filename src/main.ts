@@ -142,7 +142,9 @@ function stageClear(): void {
   const bonus = Math.ceil(world.timeLeft / 60) * TIME_BONUS_PER_SECOND;
   session.score += bonus;
   if (world.hasRune && !progress.runes.includes(levelIndex)) progress.runes.push(levelIndex);
-  progress.unlocked = Math.max(progress.unlocked, Math.min(levelIndex + 1, LEVELS.length - 1));
+  // 마지막 스테이지를 깨도 자르지 않고 그대로 적는다. 나중에 스테이지가 늘면
+  // 바로 다음 스테이지부터 이어서 할 수 있어야 하기 때문이다.
+  progress.unlocked = Math.max(progress.unlocked, levelIndex + 1);
   saveProgress(progress);
 
   $('clear-bonus').textContent = bonus.toLocaleString();
