@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Merlin's Key</title>
+    <meta name="description" content="Cast stone blocks, find the key, open the door." />
+    <!-- 개인용 게임이라 검색엔진과 AI 크롤러의 수집을 막는다 -->
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet" />
+
+    <!-- 홈 화면 웹앱 -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Merlin's Key" />
+    <meta name="theme-color" content="#0d0820" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icon-180.png" />
+    <link rel="icon" href="./icon-192.png" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="hud">
+        <div class="hud-row">
+          <span class="hud-item"><span data-i18n="stage">STAGE</span> <b id="hud-stage">1</b></span>
+          <span class="hud-item"><span data-i18n="score">SCORE</span> <b id="hud-score">0</b></span>
+          <span class="hud-item hud-icons">
+            <span id="hud-lives" class="hud-chip" data-i18n-aria="lives"></span>
+            <span id="hud-fire" class="hud-chip fire" data-i18n-aria="fire"></span>
+            <span id="hud-key" class="hud-chip key"></span>
+          </span>
+          <button id="btn-pause" class="icon-btn" data-i18n-aria="pause">II</button>
+        </div>
+        <div id="time-bar"><div id="time-fill"></div><span id="time-text">0</span></div>
+      </header>
+
+      <main id="stage-wrap">
+        <canvas id="game"></canvas>
+        <div id="toast" class="hidden"></div>
+      </main>
+
+      <section id="controls">
+        <div id="dpad" aria-hidden="true">
+          <span class="arrow left"></span>
+          <span class="arrow down"></span>
+          <span class="arrow right"></span>
+        </div>
+        <div id="buttons">
+          <button id="btn-fire" class="pad-btn small" data-i18n="fire">Fire</button>
+          <button id="btn-magic" class="pad-btn magic" data-i18n="magic">Magic</button>
+          <button id="btn-jump" class="pad-btn jump" data-i18n="jump">Jump</button>
+        </div>
+      </section>
+
+      <!-- 타이틀 -->
+      <section id="title-screen" class="overlay">
+        <div class="panel">
+          <h1 class="logo">Merlin's<br /><span>Key</span></h1>
+          <p class="tag" data-i18n="tagline"></p>
+          <button id="btn-start" class="primary" data-i18n="start">Start</button>
+          <button id="btn-continue" class="primary hidden"></button>
+          <button id="btn-stages" class="ghost" data-i18n="stageSelect">Stages</button>
+          <button id="btn-howto" class="ghost" data-i18n="howToPlay">How to play</button>
+          <p id="title-best" class="tag small"></p>
+          <div class="row">
+            <button id="btn-sound" class="ghost small"></button>
+          </div>
+          <div class="lang-switch" role="group" data-i18n-aria="language">
+            <button class="lang-btn" data-lang="en">English</button>
+            <button class="lang-btn" data-lang="ko">한국어</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 스테이지 고르기 -->
+      <section id="stages-screen" class="overlay hidden">
+        <div class="panel">
+          <h2 data-i18n="stageSelect">Stages</h2>
+          <div id="stage-grid"></div>
+          <p id="stages-runes" class="tag small"></p>
+          <button id="btn-stages-back" class="ghost" data-i18n="back">Back</button>
+        </div>
+      </section>
+
+      <!-- 게임 방법 -->
+      <section id="howto-screen" class="overlay hidden">
+        <div class="panel">
+          <h2 data-i18n="howToPlay">How to play</h2>
+          <ul class="rules">
+            <li data-i18n="howTo1"></li>
+            <li data-i18n="howTo2"></li>
+            <li data-i18n="howTo3"></li>
+            <li data-i18n="howTo4"></li>
+            <li data-i18n="howTo5"></li>
+            <li data-i18n="howTo6"></li>
+            <li data-i18n="howTo7"></li>
+          </ul>
+          <p class="tag small" data-i18n="howToKeys"></p>
+          <button id="btn-howto-close" class="primary" data-i18n="close">Close</button>
+        </div>
+      </section>
+
+      <!-- 스테이지 시작 -->
+      <section id="intro-screen" class="overlay soft hidden">
+        <div class="panel compact">
+          <p class="stage-no" id="intro-no"></p>
+          <h2 id="intro-name"></h2>
+          <p id="intro-hint" class="tag"></p>
+          <p class="tag small blink" data-i18n="tapToStart"></p>
+        </div>
+      </section>
+
+      <!-- 일시정지 -->
+      <section id="pause-screen" class="overlay hidden">
+        <div class="panel">
+          <h2 data-i18n="paused">Paused</h2>
+          <button id="btn-resume" class="primary" data-i18n="resume">Resume</button>
+          <button id="btn-restart" class="ghost" data-i18n="restartStage"></button>
+          <button id="btn-howto2" class="ghost" data-i18n="howToPlay"></button>
+          <button id="btn-quit" class="ghost" data-i18n="quitToTitle"></button>
+          <div class="row">
+            <button id="btn-sound2" class="ghost small"></button>
+          </div>
+          <div class="lang-switch" role="group" data-i18n-aria="language">
+            <button class="lang-btn" data-lang="en">English</button>
+            <button class="lang-btn" data-lang="ko">한국어</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 스테이지 클리어 -->
+      <section id="clear-screen" class="overlay soft hidden">
+        <div class="panel compact">
+          <h2 class="gold" data-i18n="stageClear">STAGE CLEAR</h2>
+          <p class="tag"><span data-i18n="timeBonus"></span> <b id="clear-bonus">0</b></p>
+          <p id="clear-rune" class="tag rune hidden" data-i18n="runeFound"></p>
+        </div>
+      </section>
+
+      <!-- 게임 오버 / 엔딩 -->
+      <section id="end-screen" class="overlay hidden">
+        <div class="panel">
+          <h2 id="end-title"></h2>
+          <p id="end-text" class="tag"></p>
+          <p class="tag"><span data-i18n="finalScore"></span> <b id="end-score">0</b></p>
+          <p id="end-record" class="tag gold hidden" data-i18n="newRecord"></p>
+          <p id="end-runes" class="tag small"></p>
+          <button id="btn-end-ok" class="primary" data-i18n="ok">OK</button>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
