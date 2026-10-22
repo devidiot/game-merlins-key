@@ -37,10 +37,14 @@ export function loadProgress(): Progress {
     // 12스테이지에 도착만 하고 못 깬 기록도 함께 넘어가지만, 스테이지 고르기에서
     // 12를 다시 할 수 있으니 손해는 없다.
     if (data.schema === undefined && unlocked === FIRST_RELEASE_LAST_STAGE) unlocked++;
+    const runes = Array.isArray(data.runes) ? data.runes.filter(Number.isInteger) : [];
+    // 룬은 스테이지를 깼을 때만 저장된다. 룬을 찾은 스테이지는 깬 것이 확실하므로
+    // 그 다음 스테이지는 반드시 열어 둔다.
+    for (const n of runes) unlocked = Math.max(unlocked, n + 1);
     return {
       unlocked,
       best: Number.isFinite(data.best) ? Number(data.best) : 0,
-      runes: Array.isArray(data.runes) ? data.runes.filter(Number.isInteger) : [],
+      runes,
       lang: typeof data.lang === 'string' ? data.lang : null,
       isSoundOn: data.isSoundOn !== false,
     };
