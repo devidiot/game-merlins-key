@@ -536,18 +536,18 @@ h2 {
 
 #stage-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
 }
 
 .stage-cell {
   position: relative;
   aspect-ratio: 1;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid var(--panel-edge);
   background: #241a52;
   font-weight: 800;
-  font-size: 18px;
+  font-size: 15px;
 }
 
 .stage-cell:disabled {
