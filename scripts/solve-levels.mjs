@@ -3,6 +3,8 @@
  *
  *   node scripts/solve-levels.mjs        모든 스테이지
  *   node scripts/solve-levels.mjs 4 7    고른 스테이지만
+ *   node scripts/solve-levels.mjs 4 --save   찾은 길을 routes.json 에 저장
+ *   NODE_LIMIT=300000 GOAL_WEIGHT=0.8 node scripts/solve-levels.mjs 4   탐색 폭 조절
  *   node scripts/solve-levels.mjs --verify            routes.json 의 길을 다시 따라가 확인
  *   node scripts/solve-levels.mjs --run 1 walk-R ...  동작을 하나씩 실행하며 위치 출력
  *
@@ -11,11 +13,13 @@
  * 길을 찾는다. 적은 지운다. 적 없이도 못 깨면 지형이 잘못된 것이기 때문이다.
  * 대신 탐색이 너무 쉬워지지 않도록 제한 시간은 그대로 둔다.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { LEVELS } from '../src/game/levels.ts';
 import { World, TILE } from '../src/game/world.ts';
 
 const NODE_LIMIT = Number(process.env.NODE_LIMIT ?? 120000);
+/** 목표까지 거리에 거는 무게. 크면 욕심껏 다가가고, 작으면 넓게 둘러본다. */
+const GOAL_WEIGHT = Number(process.env.GOAL_WEIGHT ?? 2);
 const IDLE = { left: false, right: false, down: false, jumpPressed: false, magicPressed: false, firePressed: false };
 
 /** 탐색에 필요한 상태만 빠르게 복사한다 (적과 효과는 비어 있다) */
@@ -106,6 +110,8 @@ const MACROS = [
   ['jumpLate-L', (w) => jumpLate(w, -1)],
   ['jumpLate-R', (w) => jumpLate(w, 1)],
   ['center', (w) => center(w)],
+  ['jumpCast-L', (w) => jumpCast(w, -1)],
+  ['jumpCast-R', (w) => jumpCast(w, 1)],
   ['cast-L', (w) => cast(w, -1, false)],
   ['cast-R', (w) => cast(w, 1, false)],
   ['crouch-L', (w) => cast(w, -1, true)],
@@ -143,6 +149,16 @@ function center(w) {
 function jump(w, dir, frames) {
   w.step({ ...IDLE, jumpPressed: true, left: dir < 0, right: dir > 0 });
   hold(w, { left: dir < 0, right: dir > 0 }, frames);
+  settle(w);
+}
+
+/** 제자리에서 뛰어 꼭대기 근처에서 마법 (한 칸 위 옆 블록을 만들거나 부술 때) */
+function jumpCast(w, dir) {
+  w.step({ ...IDLE, down: true, left: dir < 0, right: dir > 0 });
+  hold(w, {}, 13);
+  w.step({ ...IDLE, jumpPressed: true });
+  hold(w, {}, 16);
+  w.step({ ...IDLE, magicPressed: true });
   settle(w);
 }
 
@@ -234,7 +250,7 @@ function solve(n) {
       // 숨은 아이템 배열은 바뀌지 않았으면 부모 것을 함께 쓴다
       if (w.hidden.every((v, i) => v === cur.w.hidden[i])) w.hidden = cur.w.hidden;
       const depth = cur.depth + 1;
-      open.push({ w, parent: cur, name, depth, f: depth * 0.15 + goal(w) * 2 });
+      open.push({ w, parent: cur, name, depth, f: depth * 0.15 + goal(w) * GOAL_WEIGHT });
     }
   }
   return { path: null, nodes };
@@ -286,6 +302,14 @@ if (process.argv[2] === '--run') {
   process.exit(0);
 }
 
+function saveRoute(stage, route) {
+  const file = new URL('./routes.json', import.meta.url);
+  const routes = JSON.parse(readFileSync(file, 'utf8'));
+  routes[String(stage)] = route;
+  const sorted = Object.fromEntries(Object.entries(routes).sort((a, b) => Number(a[0]) - Number(b[0])));
+  writeFileSync(file, JSON.stringify(sorted, null, 2) + '\n');
+}
+
 const pick = process.argv.slice(2).map(Number).filter(Boolean);
 const targets = pick.length ? pick.map((n) => n - 1) : LEVELS.map((_, n) => n);
 let isFailed = false;
@@ -296,6 +320,8 @@ for (const n of targets) {
   if (r.path) {
     console.log(`스테이지 ${n + 1}: 풀림 — 동작 ${r.path.length}개, 남은 시간 ${r.timeLeft}초 (탐색 ${r.nodes}, ${ms}ms)`);
     console.log(`  ${r.path.join(' ')}`);
+    // --save 를 주면 찾은 길을 routes.json 에 바로 적는다
+    if (process.argv.includes('--save')) saveRoute(n + 1, r.path.join(' '));
   } else {
     isFailed = true;
     console.log(`스테이지 ${n + 1}: 못 찾음 (탐색 ${r.nodes}, ${ms}ms)`);
