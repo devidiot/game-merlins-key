@@ -11,6 +11,7 @@ import { playEnding, playEvent, playGameOver, setSoundEnabled, unlockAudio } fro
 import { applyI18n, detectLang, getLang, LANG_NAMES, setLang, t, type Lang, type MessageKey } from './i18n.ts';
 import { Controls } from './input.ts';
 import { LEVELS } from './game/levels.ts';
+import { blockZoom } from './no-zoom.ts';
 import { VIEW_H, VIEW_W, World, type GameEvent, type Session } from './game/world.ts';
 import { Renderer } from './render/renderer.ts';
 import { sprite } from './render/sprites.ts';
@@ -264,9 +265,9 @@ document.querySelectorAll<HTMLButtonElement>('.lang-btn').forEach((b) => {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) pauseGame();
 });
-// 확대 제스처와 길게 눌러 뜨는 메뉴를 막는다
+// 확대와 길게 눌러 뜨는 메뉴를 막는다
+blockZoom([$('stage-wrap'), $('controls')]);
 document.addEventListener('contextmenu', (e) => e.preventDefault());
-document.addEventListener('gesturestart', (e) => e.preventDefault());
 
 // ---------------------------------------------------------------- HUD
 
