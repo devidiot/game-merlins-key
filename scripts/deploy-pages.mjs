@@ -14,7 +14,7 @@
  * 바꿀 수 있고, 그 파일은 .github/workflows/pages.yml 에 이미 써 두었다.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
@@ -63,5 +63,29 @@ const url = git(['remote', 'get-url', 'origin'])
   .replace(/^https:\/\/(?:[^@]+@)?github\.com\//, '')
   .replace(/\.git$/, '');
 const [owner, repo] = url.split('/');
-console.log(`\n배포 완료 → https://${owner}.github.io/${repo}/`);
-console.log('반영까지 30초~1분쯤 걸립니다.');
+const site = `https://${owner}.github.io/${repo}/`;
+console.log(`\n푸시 완료 → ${site}`);
+
+// 푸시만으로는 끝이 아니다. GitHub Pages 빌드가 밀리면 몇 분씩 옛 판이 나가므로
+// 새 번들 이름이 실제로 서비스될 때까지 기다렸다가 결과를 알린다.
+const bundle = readFileSync(resolve(dist, 'index.html'), 'utf8').match(/assets\/index-[^"]+\.js/)?.[0];
+const deadline = Date.now() + 10 * 60 * 1000;
+let isLive = false;
+while (bundle && Date.now() < deadline) {
+  try {
+    const html = await (await fetch(`${site}?v=${Date.now()}`, { cache: 'no-store' })).text();
+    if (html.includes(bundle)) {
+      isLive = true;
+      break;
+    }
+  } catch {
+    // 네트워크가 잠깐 끊겨도 계속 기다린다
+  }
+  await new Promise((r) => setTimeout(r, 5000));
+}
+if (isLive) {
+  console.log(`반영 확인 → 새 판(${bundle})이 서비스되고 있습니다.`);
+} else {
+  console.error('10분이 지나도 새 판이 서비스되지 않습니다. 저장소의 Actions 탭에서 pages 빌드를 확인하세요.');
+  process.exit(1);
+}
