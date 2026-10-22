@@ -199,6 +199,8 @@ function openStages(): void {
     b.textContent = String(n + 1);
     b.disabled = n > progress.unlocked;
     b.title = b.disabled ? t('locked') : t(`stage${n + 1}` as MessageKey);
+    b.classList.toggle('is-cleared', n < progress.unlocked);
+    b.classList.toggle('is-next', n === progress.unlocked);
     b.classList.toggle('has-rune', progress.runes.includes(n));
     b.addEventListener('click', () => startGame(n));
     grid.append(b);
