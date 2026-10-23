@@ -282,10 +282,16 @@ button {
   height: 44px;
 }
 
+/*
+ * 오른쪽 버튼 배치: 점프는 오른쪽, 블록은 그 왼쪽 조금 아래, 불꽃은 블록 위 왼쪽 끝.
+ * 점프 중에 엄지를 왼쪽으로 조금만 옮기면 블록이 닿도록 두 버튼 높이를 겹친다.
+ * 불꽃은 잘못 눌리지 않게 블록과 띄운다.
+ */
 #buttons {
+  --btn: min(86px, 22vw);
   position: relative;
   width: min(196px, 50vw);
-  height: 160px;
+  height: calc(var(--btn) * 1.9);
   flex: none;
 }
 
@@ -306,18 +312,18 @@ button {
 }
 
 .pad-btn.jump {
-  width: min(86px, 22vw);
-  height: min(86px, 22vw);
+  width: var(--btn);
+  height: var(--btn);
   right: 0;
-  top: 8px;
+  top: calc(var(--btn) * 0.4);
   border-color: #6fd1ff;
 }
 
-.pad-btn.magic {
-  width: min(86px, 22vw);
-  height: min(86px, 22vw);
-  right: calc(min(86px, 22vw) + 10px);
-  bottom: 0;
+.pad-btn.block {
+  width: var(--btn);
+  height: var(--btn);
+  right: calc(var(--btn) + 10px);
+  top: calc(var(--btn) * 0.88);
   border-color: #b9a6ff;
   background: rgba(143, 108, 255, 0.3);
 }

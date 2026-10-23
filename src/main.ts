@@ -72,7 +72,7 @@ const canvas = $<HTMLCanvasElement>('game');
 const renderer = new Renderer(canvas);
 const controls = new Controls($('app'), $('dpad'), $('stick'), {
   jump: $('btn-jump'),
-  magic: $('btn-magic'),
+  magic: $('btn-block'),
   fire: $('btn-fire'),
 });
 controls.onFirstInput = unlockAudio;
