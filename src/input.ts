@@ -9,7 +9,9 @@
  * 반응을 즉각적으로 하려고 중심을 손가락에 바짝 붙여 둔다.
  * - 가던 방향의 가장 먼 지점에서 STICK_REVERSE 만큼만 되돌아와도 중심을 손가락
  *   자리로 옮겨 바로 멈춘다. 거기서 STICK_DEAD 만큼 더 밀면 반대로 간다.
- * - 손가락이 STICK_RADIUS 밖으로 나가면 중심이 따라온다.
+ * - 손가락이 STICK_RADIUS 밖으로 나가면 중심이 따라온다. 가로와 세로를 따로
+ *   따라오게 해서, 옆으로 크게 밀고 있어도 아래로 내린 거리가 그대로 살아 있다.
+ *   그래서 이동 중에 아래로 STICK_DOWN 만 내리면 바로 멈추고 웅크린다.
  *
  * 오른쪽 점프·마법·불꽃 버튼은 각자 따로 받는다.
  */
@@ -19,13 +21,13 @@ type Action = 'jump' | 'magic' | 'fire';
 type Dir = { left: boolean; right: boolean; down: boolean };
 
 /** 이만큼(CSS px) 밀어야 움직이기 시작한다 */
-const STICK_DEAD = 8;
+const STICK_DEAD = 14;
 /** 가던 방향에서 이만큼 되돌아오면 멈춘다 */
-const STICK_REVERSE = 6;
-/** 손가락이 이보다 멀어지면 중심이 따라온다 */
-const STICK_RADIUS = 28;
-/** 아래로 이만큼 밀면 웅크린다 */
-const STICK_DOWN = 16;
+const STICK_REVERSE = 12;
+/** 손가락이 가로·세로 각각 이보다 멀어지면 중심이 따라온다 */
+const STICK_RADIUS = 36;
+/** 아래로 이만큼 내리면 옆으로 얼마나 밀고 있든 멈추고 웅크린다 */
+const STICK_DOWN = 22;
 
 const KEY_MAP: Record<string, 'left' | 'right' | 'down' | Action> = {
   ArrowLeft: 'left',
@@ -131,17 +133,12 @@ export class Controls {
       } else {
         s.peakY = y;
       }
-      let dx = x - s.ox;
-      let dy = y - s.oy;
-      const dist = Math.hypot(dx, dy);
-      if (dist > STICK_RADIUS) {
-        // 중심을 손가락 쪽으로 끌어와 반지름 안에 둔다
-        s.ox = x - (dx / dist) * STICK_RADIUS;
-        s.oy = y - (dy / dist) * STICK_RADIUS;
-        dx = x - s.ox;
-        dy = y - s.oy;
-      }
-      const down = dy > STICK_DOWN && dy > Math.abs(dx) * 0.6;
+      // 중심을 가로·세로 따로 손가락 쪽으로 끌어와 반지름 안에 둔다
+      s.ox = Math.min(Math.max(s.ox, x - STICK_RADIUS), x + STICK_RADIUS);
+      s.oy = Math.min(Math.max(s.oy, y - STICK_RADIUS), y + STICK_RADIUS);
+      const dx = x - s.ox;
+      const dy = y - s.oy;
+      const down = dy > STICK_DOWN;
       // 웅크릴 때는 조금만 옆으로 밀어도 방향을 바꾼다 (조준)
       const side = down ? STICK_DEAD * 0.5 : STICK_DEAD;
       s.dir = { left: dx < -side, right: dx > side, down };
@@ -185,7 +182,11 @@ export class Controls {
     this.stickEl.classList.toggle('hidden', !s);
     if (!s) return;
     this.stickEl.style.transform = `translate(${s.ox}px, ${s.oy}px)`;
-    this.knobEl.style.transform = `translate(${x - s.ox}px, ${y - s.oy}px)`;
+    // 손잡이는 고리 밖으로 나가지 않게 그린다
+    const kx = x - s.ox;
+    const ky = y - s.oy;
+    const k = Math.min(1, 24 / (Math.hypot(kx, ky) || 1));
+    this.knobEl.style.transform = `translate(${kx * k}px, ${ky * k}px)`;
   }
 
   private padState(): Dir {
