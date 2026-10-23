@@ -20,16 +20,19 @@ export interface Progress {
   best: number;
   /** 룬을 찾은 스테이지 번호들 */
   runes: number[];
+  /** 깬 비밀 스테이지 번호들 (0부터) */
+  secretsCleared: number[];
   lang: string | null;
   isSoundOn: boolean;
 }
 
-const DEFAULTS: Progress = { unlocked: 0, best: 0, runes: [], lang: null, isSoundOn: true };
+/** 배열은 기록마다 따로 가져야 하므로 매번 새로 만든다 */
+const defaults = (): Progress => ({ unlocked: 0, best: 0, runes: [], secretsCleared: [], lang: null, isSoundOn: true });
 
 export function loadProgress(): Progress {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULTS };
+    if (!raw) return defaults();
     const data = JSON.parse(raw) as Partial<Progress> & { schema?: number };
     let unlocked = Number.isInteger(data.unlocked) ? Number(data.unlocked) : 0;
     // 첫 판은 마지막 스테이지를 깨도 unlocked 를 마지막 스테이지 번호에서 잘랐다.
@@ -45,11 +48,12 @@ export function loadProgress(): Progress {
       unlocked,
       best: Number.isFinite(data.best) ? Number(data.best) : 0,
       runes,
+      secretsCleared: Array.isArray(data.secretsCleared) ? data.secretsCleared.filter(Number.isInteger) : [],
       lang: typeof data.lang === 'string' ? data.lang : null,
       isSoundOn: data.isSoundOn !== false,
     };
   } catch {
-    return { ...DEFAULTS };
+    return defaults();
   }
 }
 

@@ -65,6 +65,7 @@
           <button id="btn-stages" class="ghost" data-i18n="stageSelect">Stages</button>
           <button id="btn-howto" class="ghost" data-i18n="howToPlay">How to play</button>
           <p id="title-best" class="tag small"></p>
+          <p id="title-bonus" class="tag small rune hidden"></p>
           <div class="row">
             <button id="btn-sound" class="ghost small"></button>
           </div>
@@ -80,6 +81,8 @@
         <div class="panel">
           <h2 data-i18n="stageSelect">Stages</h2>
           <div id="stage-grid"></div>
+          <h3 class="secret-title" data-i18n="secretStages">Secret stages</h3>
+          <div id="secret-grid"></div>
           <div class="stage-legend">
             <span><i class="swatch cleared"></i><span data-i18n="legendCleared"></span></span>
             <span><i class="swatch next"></i><span data-i18n="legendNext"></span></span>
@@ -102,6 +105,7 @@
             <li data-i18n="howTo5"></li>
             <li data-i18n="howTo6"></li>
             <li data-i18n="howTo7"></li>
+            <li data-i18n="howTo8"></li>
           </ul>
           <p class="tag small" data-i18n="howToKeys"></p>
           <button id="btn-howto-close" class="primary" data-i18n="close">Close</button>
@@ -142,6 +146,7 @@
           <h2 class="gold" data-i18n="stageClear">STAGE CLEAR</h2>
           <p class="tag"><span data-i18n="timeBonus"></span> <b id="clear-bonus">0</b></p>
           <p id="clear-rune" class="tag rune hidden" data-i18n="runeFound"></p>
+          <p id="clear-notes" class="tag gold hidden"></p>
         </div>
       </section>
 

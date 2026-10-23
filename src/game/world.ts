@@ -8,7 +8,8 @@
  * 좌표 단위는 픽셀이고 한 칸은 16px 이다. 맵 바깥에는 단단한 벽 한 줄이
  * 둘러져 있어서 전체 격자는 17 × 14 칸이다.
  */
-import { LEVELS, LEVEL_COLS, LEVEL_ROWS, type LevelDef } from './levels.ts';
+import { LEVEL_COLS, LEVEL_ROWS, type LevelDef } from './levels.ts';
+import { MAX_FIRE, MAX_LIVES } from '../progression.ts';
 
 export const TILE = 16;
 export const GRID_W = LEVEL_COLS + 2;
@@ -40,8 +41,6 @@ const MIRROR_INTERVAL = 260;
 const MIRROR_MAX_ALIVE = 3;
 const FAIRY_LIFE = 600;
 
-const MAX_LIVES = 9;
-const MAX_FIRE = 5;
 const DYING_FRAMES = 100;
 
 export type ItemKind = 'key' | 'gem' | 'jar' | 'hourglass' | 'bell' | 'rune';
@@ -199,7 +198,6 @@ const shrink = (b: Box, by: number): Box => ({
 });
 
 export class World {
-  readonly levelIndex: number;
   readonly level: LevelDef;
   readonly session: Session;
 
@@ -229,9 +227,8 @@ export class World {
 
   private events: GameEvent[] = [];
 
-  constructor(levelIndex: number, session: Session) {
-    this.levelIndex = levelIndex;
-    this.level = LEVELS[levelIndex];
+  constructor(level: LevelDef, session: Session) {
+    this.level = level;
     this.session = session;
     this.timeLeft = this.level.time * 60;
     this.load();

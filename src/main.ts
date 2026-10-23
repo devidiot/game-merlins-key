@@ -4,23 +4,29 @@
  * 타이틀 → 스테이지 소개 → 플레이 → (클리어 → 다음 스테이지 소개) … → 엔딩
  *                              └ 목숨이 남으면 같은 스테이지 소개, 없으면 게임 오버
  *
+ * 비밀 스테이지는 스테이지 고르기에서 하나씩 한다. 깨면 결과 화면으로 가고,
+ * 다섯 개를 모두 깨면 진짜 엔딩이다. 룬 규칙은 progression.ts 에 있다.
+ *
  * 게임 로직은 60fps 고정 간격으로 돌리고, 그림은 화면 주사율대로 그린다.
  */
 import './style.css';
 import { playEnding, playEvent, playGameOver, setSoundEnabled, unlockAudio } from './audio.ts';
 import { applyI18n, detectLang, getLang, LANG_NAMES, setLang, t, type Lang, type MessageKey } from './i18n.ts';
 import { Controls } from './input.ts';
-import { LEVELS } from './game/levels.ts';
+import { CHAPTERS, LEVELS, SECRET_LEVELS, type LevelDef } from './game/levels.ts';
 import { blockZoom } from './no-zoom.ts';
 import { VIEW_H, VIEW_W, World, type GameEvent, type Session } from './game/world.ts';
 import { Renderer } from './render/renderer.ts';
 import { sprite } from './render/sprites.ts';
+import { chapterOf, chapterRunes, isSecretUnlocked, isTrueEnding, runeBonus, startingKit } from './progression.ts';
 import { loadProgress, saveProgress } from './storage.ts';
 
 type Screen = 'title' | 'intro' | 'play' | 'paused' | 'clear' | 'end';
+/** 지금 하는 스테이지. 일반은 LEVELS, 비밀은 SECRET_LEVELS 의 번호(0부터)다. */
+type StageRef = { isSecret: boolean; index: number };
+type Ending = 'gameOver' | 'allClear' | 'secretClear' | 'trueEnding';
 
 const STEP_MS = 1000 / 60;
-const START_LIVES = 3;
 const INTRO_AUTO_MS = 2600;
 const CLEAR_SHOW_MS = 2200;
 const TIME_BONUS_PER_SECOND = 10;
@@ -49,8 +55,8 @@ controls.onPause = () => {
 };
 
 let screen: Screen = 'title';
-let session: Session = { score: 0, lives: START_LIVES, fire: 0 };
-let levelIndex = 0;
+let session: Session = { score: 0, lives: 0, fire: 0 };
+let current: StageRef = { isSecret: false, index: 0 };
 let world: World | null = null;
 let introTimer = 0;
 let clearTimer = 0;
@@ -77,6 +83,9 @@ function refreshTitle(): void {
   cont.classList.toggle('hidden', next === 0);
   cont.textContent = t('continueFrom', { n: next + 1 });
   $('title-best').textContent = progress.best > 0 ? `${t('best')} ${progress.best.toLocaleString()}` : '';
+  const bonus = runeBonus(progress.runes.length);
+  $('title-bonus').textContent = t('runeBonus', { n: bonus.lives });
+  $('title-bonus').classList.toggle('hidden', bonus.lives === 0);
   const soundLabel = t(progress.isSoundOn ? 'soundOn' : 'soundOff');
   $('btn-sound').textContent = soundLabel;
   $('btn-sound2').textContent = soundLabel;
@@ -85,20 +94,30 @@ function refreshTitle(): void {
   });
 }
 
-function startGame(stage: number): void {
+const levelOf = (ref: StageRef): LevelDef => (ref.isSecret ? SECRET_LEVELS : LEVELS)[ref.index];
+/** HUD·소개 화면에 쓰는 짧은 번호: 일반은 "13", 비밀은 "S2" */
+const shortLabel = (ref: StageRef): string => (ref.isSecret ? `S${ref.index + 1}` : String(ref.index + 1));
+const nameKey = (ref: StageRef): MessageKey =>
+  (ref.isSecret ? `secret${ref.index + 1}` : `stage${ref.index + 1}`) as MessageKey;
+
+function startGame(ref: StageRef): void {
   unlockAudio();
-  session = { score: 0, lives: START_LIVES, fire: 0 };
-  levelIndex = stage;
+  // 룬 10개마다 목숨과 불꽃을 하나씩 더 들고 시작한다
+  const kit = startingKit(progress.runes.length);
+  session = { score: 0, lives: kit.lives, fire: kit.fire };
+  current = ref;
   showIntro();
 }
 
 function showIntro(): void {
-  world = new World(levelIndex, session);
+  world = new World(levelOf(current), session);
   screen = 'intro';
   controls.reset();
-  $('intro-no').textContent = `${t('stage')} ${levelIndex + 1}`;
-  $('intro-name').textContent = t(`stage${levelIndex + 1}` as MessageKey);
-  const hint = t(`hint${levelIndex + 1}` as MessageKey);
+  $('intro-no').textContent = current.isSecret
+    ? `${t('secret')} ${current.index + 1}`
+    : `${t('stage')} ${current.index + 1}`;
+  $('intro-name').textContent = t(nameKey(current));
+  const hint = current.isSecret ? '' : t(`hint${current.index + 1}` as MessageKey);
   $('intro-hint').textContent = hint;
   $('intro-hint').classList.toggle('hidden', !hint);
   showOverlay('intro-screen');
@@ -141,45 +160,79 @@ function stageClear(): void {
   screen = 'clear';
   const bonus = Math.ceil(world.timeLeft / 60) * TIME_BONUS_PER_SECOND;
   session.score += bonus;
-  if (world.hasRune && !progress.runes.includes(levelIndex)) progress.runes.push(levelIndex);
-  // 마지막 스테이지를 깨도 자르지 않고 그대로 적는다. 나중에 스테이지가 늘면
-  // 바로 다음 스테이지부터 이어서 할 수 있어야 하기 때문이다.
-  progress.unlocked = Math.max(progress.unlocked, levelIndex + 1);
+  const notes: string[] = [];
+
+  if (current.isSecret) {
+    if (!progress.secretsCleared.includes(current.index)) progress.secretsCleared.push(current.index);
+  } else {
+    const stage = current.index;
+    if (world.hasRune && !progress.runes.includes(stage)) {
+      const before = runeBonus(progress.runes.length);
+      const chapter = chapterOf(stage);
+      const wasOpen = isSecretUnlocked(chapter, progress.runes);
+      progress.runes.push(stage);
+      if (!wasOpen && isSecretUnlocked(chapter, progress.runes)) notes.push(t('secretUnlocked', { n: chapter + 1 }));
+      const after = runeBonus(progress.runes.length);
+      if (after.lives > before.lives) notes.push(t('runeBonusUp', { n: after.lives }));
+    }
+    // 마지막 스테이지를 깨도 자르지 않고 그대로 적는다. 나중에 스테이지가 늘면
+    // 바로 다음 스테이지부터 이어서 할 수 있어야 하기 때문이다.
+    progress.unlocked = Math.max(progress.unlocked, stage + 1);
+  }
   saveProgress(progress);
 
   $('clear-bonus').textContent = bonus.toLocaleString();
   $('clear-rune').classList.toggle('hidden', !world.hasRune);
+  $('clear-notes').textContent = notes.join('\n');
+  $('clear-notes').classList.toggle('hidden', notes.length === 0);
   showOverlay('clear-screen');
   updateHud();
 
-  clearTimer = window.setTimeout(() => {
-    if (screen !== 'clear') return;
-    if (levelIndex + 1 >= LEVELS.length) {
-      finish(true);
-    } else {
-      levelIndex++;
-      showIntro();
-    }
-  }, CLEAR_SHOW_MS);
+  // 알림이 있으면 읽을 시간을 조금 더 준다
+  clearTimer = window.setTimeout(
+    () => {
+      if (screen !== 'clear') return;
+      if (current.isSecret) {
+        finish(isTrueEnding(progress.secretsCleared) ? 'trueEnding' : 'secretClear');
+      } else if (current.index + 1 >= LEVELS.length) {
+        finish('allClear');
+      } else {
+        current = { isSecret: false, index: current.index + 1 };
+        showIntro();
+      }
+    },
+    CLEAR_SHOW_MS + notes.length * 1500,
+  );
 }
 
 function gameOver(): void {
   playGameOver();
-  finish(false);
+  finish('gameOver');
 }
 
-function finish(isAllClear: boolean): void {
+const ENDING_TEXT: Record<Ending, { title: MessageKey; text: MessageKey | null }> = {
+  gameOver: { title: 'gameOver', text: null },
+  allClear: { title: 'allClear', text: 'endingText' },
+  secretClear: { title: 'secretClear', text: 'secretClearText' },
+  trueEnding: { title: 'trueEnding', text: 'trueEndingText' },
+};
+
+function finish(ending: Ending): void {
   screen = 'end';
   clearTimeout(clearTimer);
-  if (isAllClear) playEnding();
+  if (ending !== 'gameOver') playEnding();
   const isRecord = session.score > progress.best;
   if (isRecord) progress.best = session.score;
   saveProgress(progress);
 
-  $('end-title').textContent = t(isAllClear ? 'allClear' : 'gameOver');
-  $('end-title').classList.toggle('gold', isAllClear);
-  $('end-text').textContent = isAllClear ? t('endingText') : '';
-  $('end-text').classList.toggle('hidden', !isAllClear);
+  const { title, text } = ENDING_TEXT[ending];
+  let body = text ? t(text) : '';
+  // 일반 스테이지를 다 깼는데 룬이 모자라면 비밀 스테이지를 귀띔한다
+  if (ending === 'allClear' && progress.runes.length < runeTotal()) body += `\n\n${t('allClearHint')}`;
+  $('end-title').textContent = t(title);
+  $('end-title').classList.toggle('gold', ending !== 'gameOver');
+  $('end-text').textContent = body;
+  $('end-text').classList.toggle('hidden', !body);
   $('end-score').textContent = session.score.toLocaleString();
   $('end-record').classList.toggle('hidden', !isRecord || session.score === 0);
   $('end-runes').textContent = t('runesTotal', { got: progress.runes.length, total: runeTotal() });
@@ -202,8 +255,27 @@ function openStages(): void {
     b.classList.toggle('is-cleared', n < progress.unlocked);
     b.classList.toggle('is-next', n === progress.unlocked);
     b.classList.toggle('has-rune', progress.runes.includes(n));
-    b.addEventListener('click', () => startGame(n));
+    b.addEventListener('click', () => startGame({ isSecret: false, index: n }));
     grid.append(b);
+  });
+
+  // 비밀 스테이지: 잠겨 있으면 그 장의 룬 수를 보여 준다
+  const secrets = $('secret-grid');
+  secrets.replaceChildren();
+  CHAPTERS.forEach((_, i) => {
+    const b = document.createElement('button');
+    b.className = 'stage-cell secret';
+    const isOpen = isSecretUnlocked(i, progress.runes);
+    const { got, total } = chapterRunes(i, progress.runes);
+    const label = document.createElement('span');
+    label.textContent = `S${i + 1}`;
+    const sub = document.createElement('small');
+    sub.textContent = isOpen ? t(`secret${i + 1}` as MessageKey) : t('chapterRunes', { got, total });
+    b.append(label, sub);
+    b.disabled = !isOpen;
+    b.classList.toggle('is-cleared', progress.secretsCleared.includes(i));
+    b.addEventListener('click', () => startGame({ isSecret: true, index: i }));
+    secrets.append(b);
   });
   $('stages-runes').textContent = t('runesTotal', { got: progress.runes.length, total: runeTotal() });
   showOverlay('stages-screen');
@@ -211,8 +283,10 @@ function openStages(): void {
 
 // ---------------------------------------------------------------- 버튼 연결
 
-$('btn-start').addEventListener('click', () => startGame(0));
-$('btn-continue').addEventListener('click', () => startGame(Math.min(progress.unlocked, LEVELS.length - 1)));
+$('btn-start').addEventListener('click', () => startGame({ isSecret: false, index: 0 }));
+$('btn-continue').addEventListener('click', () =>
+  startGame({ isSecret: false, index: Math.min(progress.unlocked, LEVELS.length - 1) }),
+);
 $('btn-stages').addEventListener('click', openStages);
 $('btn-stages-back').addEventListener('click', () => showOverlay('title-screen'));
 
@@ -292,10 +366,10 @@ let lastHud = '';
 function updateHud(): void {
   if (!world) return;
   const seconds = Math.ceil(world.timeLeft / 60);
-  const sig = [levelIndex, session.score, session.lives, session.fire, world.hasKey, seconds, getLang()].join('|');
+  const sig = [shortLabel(current), session.score, session.lives, session.fire, world.hasKey, seconds, getLang()].join('|');
   if (sig === lastHud) return;
   lastHud = sig;
-  hud.stage.textContent = String(levelIndex + 1);
+  hud.stage.textContent = shortLabel(current);
   hud.score.textContent = session.score.toLocaleString();
   hud.lives.textContent = String(session.lives);
   hud.fire.textContent = String(session.fire);
@@ -376,11 +450,13 @@ applyI18n(document);
 goTitle();
 layout();
 
-// 개발 서버에서만: ?stage=3 으로 열면 그 스테이지를 바로 시작한다
+// 개발 서버에서만: ?stage=3 이나 ?stage=S2 로 열면 그 스테이지를 바로 시작한다
 if (import.meta.env.DEV) {
-  const stage = Number(new URLSearchParams(location.search).get('stage'));
-  if (stage >= 1 && stage <= LEVELS.length) {
-    startGame(stage - 1);
+  const param = (new URLSearchParams(location.search).get('stage') ?? '').toUpperCase();
+  const isSecret = param.startsWith('S');
+  const n = Number(isSecret ? param.slice(1) : param);
+  if (n >= 1 && n <= (isSecret ? SECRET_LEVELS : LEVELS).length) {
+    startGame({ isSecret, index: n - 1 });
     beginPlay();
   }
 }

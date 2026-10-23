@@ -599,6 +599,44 @@ h2 {
   box-shadow: 0 0 6px #b9a6ff;
 }
 
+.secret-title {
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: #cdbfff;
+}
+
+#secret-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.stage-cell.secret {
+  aspect-ratio: auto;
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-color: #7b4ee0;
+}
+
+.stage-cell.secret small {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.stage-cell.secret:not(:disabled) {
+  background: #2b1660;
+  box-shadow: 0 0 10px rgba(185, 166, 255, 0.35);
+}
+
+#clear-notes {
+  white-space: pre-line;
+}
+
 .stage-cell:disabled {
   opacity: 0.35;
 }
