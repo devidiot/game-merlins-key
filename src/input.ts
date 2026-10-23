@@ -26,6 +26,12 @@ const KEY_MAP: Record<string, 'left' | 'right' | 'down' | Action> = {
   KeyK: 'fire',
 };
 
+/** 글자를 입력하는 칸(input, textarea, 편집 가능한 요소)에서 일어난 키인지 */
+function isTyping(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target.isContentEditable;
+}
+
 export class Controls {
   private keys = new Set<string>();
   private padPointers = new Map<number, { left: boolean; right: boolean; down: boolean }>();
@@ -113,6 +119,8 @@ export class Controls {
   }
 
   private onKey(e: KeyboardEvent, isDown: boolean): void {
+    // 이름·백업 코드를 입력하는 중이면 키를 게임 조작으로 가로채지 않는다
+    if (isTyping(e.target)) return;
     if (e.code === 'KeyP' || e.code === 'Escape') {
       if (isDown && !e.repeat) this.onPause?.();
       return;
