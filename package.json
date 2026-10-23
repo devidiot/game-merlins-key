@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite --host",
     "build": "npm run check && tsc --noEmit && vite build && node scripts/precache-sw.mjs",
-    "check": "node scripts/check-levels.mjs && node scripts/solve-levels.mjs --verify",
+    "check": "node scripts/test-logic.mjs && node scripts/check-levels.mjs && node scripts/solve-levels.mjs --verify",
     "preview": "vite preview --host",
     "icons": "node scripts/make-icons.mjs",
     "deploy": "npm run build && node scripts/deploy-pages.mjs"
