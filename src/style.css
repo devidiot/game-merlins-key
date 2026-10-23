@@ -652,3 +652,163 @@ h2 {
   background: #b9a6ff;
   box-shadow: 0 0 6px #b9a6ff;
 }
+
+/* ------------------------------------------------------------ 이름·설치·백업 */
+
+input,
+textarea {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-edge);
+  background: #120b2e;
+  color: var(--text);
+  /* iOS 는 16px 보다 작은 입력칸을 누르면 화면을 확대한다 */
+  font: inherit;
+  font-size: 16px;
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: manipulation;
+}
+
+textarea {
+  resize: none;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+textarea[readonly] {
+  font-size: 12px;
+}
+
+#name-form,
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#name-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.name-row {
+  display: flex;
+  gap: 6px;
+}
+
+.name-pick {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.small-logo {
+  font-size: 26px;
+}
+
+.small-logo span {
+  font-size: 32px;
+}
+
+.player-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.player-row b {
+  color: var(--text);
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.warning {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 94, 94, 0.12);
+  border: 1px solid rgba(255, 94, 94, 0.45);
+  color: #ffc4c4;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--gold);
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.tag.error,
+#backup-message.error {
+  color: #ff8f8f;
+}
+
+.release {
+  white-space: pre-line;
+  color: #cdbfff;
+}
+
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.step-icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #2b1f63;
+  display: grid;
+  place-items: center;
+}
+
+.step-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: #6fd1ff;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.release-tag {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 3px;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--gold);
+  line-height: 1;
+}
