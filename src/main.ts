@@ -70,7 +70,7 @@ const stampNow = (): number => serverNow() ?? Date.now();
 
 const canvas = $<HTMLCanvasElement>('game');
 const renderer = new Renderer(canvas);
-const controls = new Controls($('dpad'), {
+const controls = new Controls($('app'), $('dpad'), $('stick'), {
   jump: $('btn-jump'),
   magic: $('btn-magic'),
   fire: $('btn-fire'),

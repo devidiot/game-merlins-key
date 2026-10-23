@@ -812,3 +812,29 @@ textarea[readonly] {
   color: var(--gold);
   line-height: 1;
 }
+
+/* ------------------------------------------------------------ 떠다니는 조이스틱 */
+
+#stick {
+  position: fixed;
+  left: -48px;
+  top: -48px;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 2px solid rgba(185, 166, 255, 0.45);
+  background: rgba(143, 108, 255, 0.12);
+  pointer-events: none;
+  z-index: 5;
+}
+
+#stick-knob {
+  position: absolute;
+  left: 30px;
+  top: 30px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(185, 166, 255, 0.6);
+  box-shadow: 0 0 12px rgba(185, 166, 255, 0.6);
+}
