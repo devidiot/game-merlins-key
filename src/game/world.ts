@@ -23,6 +23,10 @@ export const STONE = 2;
 
 // 멀린의 몸놀림. 60fps 한 프레임 기준이다.
 const WALK_SPEED = 1.35;
+/** 웅크린 채 기어가는 속도. 걷기의 5분의 1쯤이다. */
+const CRAWL_SPEED = 0.28;
+/** 웅크린 채 방향을 이만큼(프레임) 누르고 있어야 기어간다. 짧게 누르면 방향만 바꾼다. */
+const CRAWL_DELAY = 10;
 const GRAVITY = 0.19;
 const JUMP_SPEED = 3.85;
 const MAX_FALL = 3.6;
@@ -87,6 +91,8 @@ export interface Player extends Box {
   /** 지팡이를 휘두르는 그림을 보여 줄 남은 프레임 */
   castPose: number;
   walkTime: number;
+  /** 웅크린 채 같은 방향을 누르고 있는 프레임 수 */
+  crawlHold: number;
 }
 
 export interface Enemy extends Box {
@@ -292,6 +298,7 @@ export class World {
       castTimer: 0,
       castPose: 0,
       walkTime: 0,
+      crawlHold: 0,
     };
   }
 
@@ -475,8 +482,10 @@ export class World {
     if (input.left) move -= 1;
     if (input.right) move += 1;
     if (move !== 0) p.facing = move > 0 ? 1 : -1;
-    // 웅크린 동안에는 방향만 바꾸고 제자리에 있는다 (마법 조준용)
-    p.vx = p.isCrouching ? 0 : move * WALK_SPEED;
+    // 웅크린 동안 짧게 누르면 방향만 바꾸고(블록 조준), 계속 누르면 천천히 기어간다
+    p.crawlHold = p.isCrouching && move !== 0 ? p.crawlHold + 1 : 0;
+    if (!p.isCrouching) p.vx = move * WALK_SPEED;
+    else p.vx = p.crawlHold > CRAWL_DELAY ? move * CRAWL_SPEED : 0;
     if (p.vx !== 0 && p.onGround) p.walkTime++;
 
     if (input.jumpPressed) p.jumpBuffer = JUMP_BUFFER_FRAMES;
