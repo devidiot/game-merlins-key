@@ -823,10 +823,10 @@ textarea[readonly] {
 
 #stick {
   position: fixed;
-  left: -48px;
-  top: -48px;
-  width: 96px;
-  height: 96px;
+  left: -40px;
+  top: -40px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
   border: 2px solid rgba(185, 166, 255, 0.45);
   background: rgba(143, 108, 255, 0.12);
@@ -836,8 +836,8 @@ textarea[readonly] {
 
 #stick-knob {
   position: absolute;
-  left: 30px;
-  top: 30px;
+  left: 22px;
+  top: 22px;
   width: 36px;
   height: 36px;
   border-radius: 50%;

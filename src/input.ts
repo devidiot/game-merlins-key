@@ -3,9 +3,13 @@
  *
  * 이동은 "떠다니는 조이스틱"이다. 화면 왼쪽 절반 어디든 누르면 그 자리가 중심이
  * 되고, 거기서 좌우로 밀면 이동, 아래로 밀면 웅크린다. 아래 대각선이면 웅크린 채
- * 방향만 바꾼다(마법 조준). 손가락이 반지름 밖으로 나가면 중심이 따라와서, 반대로
- * 바꿀 때 조금만 되돌려도 된다. 왼쪽 아래 방향키 그림은 누르는 방향을 보여 주는
- * 표시일 뿐 꼭 거기를 누를 필요는 없다.
+ * 방향만 바꾼다(블록 조준). 왼쪽 아래 방향키 그림은 누르는 방향을 보여 주는 표시일
+ * 뿐 꼭 거기를 누를 필요는 없다.
+ *
+ * 반응을 즉각적으로 하려고 중심을 손가락에 바짝 붙여 둔다.
+ * - 가던 방향의 가장 먼 지점에서 STICK_REVERSE 만큼만 되돌아와도 중심을 손가락
+ *   자리로 옮겨 바로 멈춘다. 거기서 STICK_DEAD 만큼 더 밀면 반대로 간다.
+ * - 손가락이 STICK_RADIUS 밖으로 나가면 중심이 따라온다.
  *
  * 오른쪽 점프·마법·불꽃 버튼은 각자 따로 받는다.
  */
@@ -15,11 +19,13 @@ type Action = 'jump' | 'magic' | 'fire';
 type Dir = { left: boolean; right: boolean; down: boolean };
 
 /** 이만큼(CSS px) 밀어야 움직이기 시작한다 */
-const STICK_DEAD = 12;
+const STICK_DEAD = 8;
+/** 가던 방향에서 이만큼 되돌아오면 멈춘다 */
+const STICK_REVERSE = 6;
 /** 손가락이 이보다 멀어지면 중심이 따라온다 */
-const STICK_RADIUS = 46;
+const STICK_RADIUS = 28;
 /** 아래로 이만큼 밀면 웅크린다 */
-const STICK_DOWN = 20;
+const STICK_DOWN = 16;
 
 const KEY_MAP: Record<string, 'left' | 'right' | 'down' | Action> = {
   ArrowLeft: 'left',
@@ -47,7 +53,7 @@ function isTyping(target: EventTarget | null): boolean {
 export class Controls {
   private keys = new Set<string>();
   /** 조이스틱을 잡은 손가락. 한 번에 하나만 받는다. */
-  private stick: { id: number; ox: number; oy: number; dir: Dir } | null = null;
+  private stick: { id: number; ox: number; oy: number; peakX: number; peakY: number; dir: Dir } | null = null;
   private buttonPointers = new Map<number, Action>();
   private pressed = { jump: 0, magic: 0, fire: 0 };
   private pad: HTMLElement;
@@ -94,28 +100,52 @@ export class Controls {
       } catch {
         // 붙잡기를 못 해도 zone 안에서는 계속 받는다
       }
-      this.stick = { id: e.pointerId, ox: e.clientX, oy: e.clientY, dir: { left: false, right: false, down: false } };
+      this.stick = {
+        id: e.pointerId,
+        ox: e.clientX,
+        oy: e.clientY,
+        peakX: e.clientX,
+        peakY: e.clientY,
+        dir: { left: false, right: false, down: false },
+      };
       this.paintStick(e.clientX, e.clientY);
     });
     zone.addEventListener('pointermove', (e) => {
       const s = this.stick;
       if (!s || s.id !== e.pointerId) return;
-      let dx = e.clientX - s.ox;
-      let dy = e.clientY - s.oy;
+      const x = e.clientX;
+      const y = e.clientY;
+      // 가던 방향에서 조금만 되돌아와도 중심을 손가락 자리로 옮겨 바로 멈춘다
+      if (s.dir.right) {
+        s.peakX = Math.max(s.peakX, x);
+        if (x < s.peakX - STICK_REVERSE) s.ox = s.peakX = x;
+      } else if (s.dir.left) {
+        s.peakX = Math.min(s.peakX, x);
+        if (x > s.peakX + STICK_REVERSE) s.ox = s.peakX = x;
+      } else {
+        s.peakX = x;
+      }
+      if (s.dir.down) {
+        s.peakY = Math.max(s.peakY, y);
+        if (y < s.peakY - STICK_REVERSE) s.oy = s.peakY = y;
+      } else {
+        s.peakY = y;
+      }
+      let dx = x - s.ox;
+      let dy = y - s.oy;
       const dist = Math.hypot(dx, dy);
       if (dist > STICK_RADIUS) {
         // 중심을 손가락 쪽으로 끌어와 반지름 안에 둔다
-        s.ox = e.clientX - (dx / dist) * STICK_RADIUS;
-        s.oy = e.clientY - (dy / dist) * STICK_RADIUS;
-        dx = e.clientX - s.ox;
-        dy = e.clientY - s.oy;
+        s.ox = x - (dx / dist) * STICK_RADIUS;
+        s.oy = y - (dy / dist) * STICK_RADIUS;
+        dx = x - s.ox;
+        dy = y - s.oy;
       }
-      const isMoving = Math.hypot(dx, dy) > STICK_DEAD;
-      const down = isMoving && dy > STICK_DOWN && dy > Math.abs(dx) * 0.6;
+      const down = dy > STICK_DOWN && dy > Math.abs(dx) * 0.6;
       // 웅크릴 때는 조금만 옆으로 밀어도 방향을 바꾼다 (조준)
       const side = down ? STICK_DEAD * 0.5 : STICK_DEAD;
-      s.dir = { left: isMoving && dx < -side, right: isMoving && dx > side, down };
-      this.paintStick(e.clientX, e.clientY);
+      s.dir = { left: dx < -side, right: dx > side, down };
+      this.paintStick(x, y);
     });
     const end = (e: PointerEvent) => {
       if (this.stick?.id !== e.pointerId) return;
