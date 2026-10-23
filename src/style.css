@@ -322,7 +322,7 @@ button {
 .pad-btn.block {
   width: var(--btn);
   height: var(--btn);
-  right: calc(var(--btn) + 10px);
+  right: calc(var(--btn) + 5px);
   top: calc(var(--btn) * 0.88);
   border-color: #b9a6ff;
   background: rgba(143, 108, 255, 0.3);
