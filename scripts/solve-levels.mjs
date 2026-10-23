@@ -2,8 +2,9 @@
  * 스테이지마다 실제로 깰 수 있는지 탐색으로 확인한다.
  *
  *   node scripts/solve-levels.mjs        모든 스테이지
- *   node scripts/solve-levels.mjs 4 7    고른 스테이지만
+ *   node scripts/solve-levels.mjs 4 7 S2 고른 스테이지만 (비밀 스테이지는 S1~S5)
  *   node scripts/solve-levels.mjs 4 --save   찾은 길을 routes.json 에 저장
+ *   node scripts/solve-levels.mjs 4 --seed   routes.json 의 기존 길을 출발점으로 삼아 탐색
  *   NODE_LIMIT=300000 GOAL_WEIGHT=0.8 node scripts/solve-levels.mjs 4   탐색 폭 조절
  *   node scripts/solve-levels.mjs --verify            routes.json 의 길을 다시 따라가 확인
  *   node scripts/solve-levels.mjs --run 1 walk-R ...  동작을 하나씩 실행하며 위치 출력
@@ -14,7 +15,7 @@
  * 대신 탐색이 너무 쉬워지지 않도록 제한 시간은 그대로 둔다.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { LEVELS } from '../src/game/levels.ts';
+import { LEVELS, SECRET_LEVELS } from '../src/game/levels.ts';
 import { World, TILE } from '../src/game/world.ts';
 
 const NODE_LIMIT = Number(process.env.NODE_LIMIT ?? 120000);
@@ -192,6 +193,7 @@ function key(w) {
   mixIn(Math.round(p.x / 16));
   mixIn(Math.round(p.y / 16));
   mixIn(w.hasKey ? 1 : 0);
+  mixIn(w.hasRune ? 1 : 0);
   // 지형은 멀린 둘레 7 × 7 칸만 본다. 가지치기가 거칠어지지만 찾은 길은
   // 진짜 엔진으로 따라간 결과라서 틀린 길을 맞다고 할 일은 없다.
   const cx = Math.floor((p.x + p.w / 2) / TILE);
@@ -203,26 +205,49 @@ function key(w) {
   return (h1 >>> 0) * 0x100000 + ((h2 >>> 0) & 0xfffff);
 }
 
-function goal(w) {
+/**
+ * 스테이지 목록. 일반 스테이지는 '1'~'50', 비밀 스테이지는 'S1'~'S5' 로 부른다.
+ * 일반 스테이지는 룬까지 먹고 깨야 성공으로 친다.
+ */
+const STAGES = [
+  ...LEVELS.map((level, n) => ({ id: String(n + 1), level, needsRune: true })),
+  ...SECRET_LEVELS.map((level, n) => ({ id: `S${n + 1}`, level, needsRune: false })),
+];
+const stageById = (id) => STAGES.find((s) => s.id === String(id).toUpperCase());
+
+function newWorld(stage) {
+  const w = new World(stage.level, { score: 0, lives: 3, fire: 0 });
+  w.enemies = [];
+  w.mirrors = [];
+  settle(w);
+  return w;
+}
+
+const isSolved = (w, stage) => w.state === 'clear' && (!stage.needsRune || w.hasRune);
+
+/** 숨은 아이템이면 블록 칸을, 드러난 아이템이면 그 칸을 돌려준다 */
+function findItem(w, kind) {
+  const it = w.items.find((i) => i.kind === kind);
+  if (it) return it;
+  const i = w.hidden.indexOf(kind);
+  return i < 0 ? null : { tx: i % 17, ty: Math.floor(i / 17) };
+}
+
+/** 룬 → 열쇠 → 문 순서로 다음 목표까지의 거리. 못 얻은 것마다 큰 벌점을 더한다. */
+function goal(w, stage) {
   const p = w.player;
-  const t = w.hasKey ? w.door : w.items.find((i) => i.kind === 'key') ?? hiddenKey(w);
-  if (!t) return 0;
-  // 열쇠를 아직 못 얻었으면 큰 벌점을 더해, 열쇠를 얻은 상태가 늘 앞서게 한다
+  const needRune = stage.needsRune && !w.hasRune;
+  const t = (needRune && findItem(w, 'rune')) || (!w.hasKey && findItem(w, 'key')) || w.door;
   const dist = Math.abs((p.x + 6) / TILE - t.tx - 0.5) + Math.abs((p.y + 8) / TILE - t.ty - 0.5);
-  return dist + (w.hasKey ? 0 : 30);
+  return dist + (needRune ? 30 : 0) + (w.hasKey ? 0 : 30);
 }
 
-function hiddenKey(w) {
-  const i = w.hidden.indexOf('key');
-  if (i < 0) return null;
-  return { tx: i % 17, ty: Math.floor(i / 17) };
-}
-
-function solve(n) {
-  const start = new World(n, { score: 0, lives: 3, fire: 0 });
-  start.enemies = [];
-  start.mirrors = [];
-  settle(start);
+/**
+ * seedRoute 를 주면 그 길을 따라가며 지나는 모든 상태를 출발점으로 함께 넣는다.
+ * 이미 아는 "열쇠 → 문" 길에서 룬만 들렀다 오는 길을 찾을 때 쓴다 (--seed).
+ */
+function solve(stage, seedRoute = null) {
+  const start = newWorld(stage);
 
   // 경로는 부모를 가리키는 연결로만 남겨 메모리를 아낀다
   const pathOf = (node, last) => {
@@ -233,8 +258,23 @@ function solve(n) {
 
   // 가장 가망 있는 상태부터 펼친다 (깊이 + 목표까지 거리)
   const open = new Heap();
-  open.push({ w: start, parent: null, name: null, depth: 0, f: goal(start) });
+  open.push({ w: start, parent: null, name: null, depth: 0, f: goal(start, stage) });
   const seen = new Set([key(start)]);
+  if (seedRoute) {
+    const table = Object.fromEntries(MACROS);
+    let w = start;
+    let parent = { w: start, parent: null, name: null, depth: 0 };
+    for (const name of seedRoute.split(' ')) {
+      w = clone(w);
+      table[name](w);
+      if (w.state !== 'play') break;
+      const node = { w, parent, name, depth: parent.depth + 1 };
+      node.f = node.depth * 0.15 + goal(w, stage) * GOAL_WEIGHT;
+      seen.add(key(w));
+      open.push(node);
+      parent = node;
+    }
+  }
   let nodes = 0;
   while (open.size && nodes < NODE_LIMIT) {
     const cur = open.pop();
@@ -242,7 +282,7 @@ function solve(n) {
     for (const [name, fn] of MACROS) {
       const w = clone(cur.w);
       fn(w);
-      if (w.state === 'clear') return { path: pathOf(cur, name), nodes, timeLeft: Math.round(w.timeLeft / 60) };
+      if (isSolved(w, stage)) return { path: pathOf(cur, name), nodes, timeLeft: Math.round(w.timeLeft / 60) };
       if (w.state !== 'play') continue;
       const k = key(w);
       if (seen.has(k)) continue;
@@ -250,11 +290,13 @@ function solve(n) {
       // 숨은 아이템 배열은 바뀌지 않았으면 부모 것을 함께 쓴다
       if (w.hidden.every((v, i) => v === cur.w.hidden[i])) w.hidden = cur.w.hidden;
       const depth = cur.depth + 1;
-      open.push({ w, parent: cur, name, depth, f: depth * 0.15 + goal(w) * GOAL_WEIGHT });
+      open.push({ w, parent: cur, name, depth, f: depth * 0.15 + goal(w, stage) * GOAL_WEIGHT });
     }
   }
   return { path: null, nodes };
 }
+
+const label = (stage) => (stage.needsRune ? `스테이지 ${stage.id}` : `비밀 스테이지 ${stage.id}`);
 
 // 저장해 둔 길(scripts/routes.json)을 다시 따라가 모든 스테이지가 여전히 깨지는지 본다.
 // 물리나 맵을 고쳤을 때 깨지 못하게 된 스테이지를 빌드 전에 잡는다.
@@ -262,69 +304,76 @@ if (process.argv[2] === '--verify') {
   const routes = JSON.parse(readFileSync(new URL('./routes.json', import.meta.url), 'utf8'));
   const table = Object.fromEntries(MACROS);
   const broken = [];
-  LEVELS.forEach((_, n) => {
-    const route = routes[String(n + 1)];
+  for (const stage of STAGES) {
+    const route = routes[stage.id];
     if (!route) {
-      broken.push(`스테이지 ${n + 1}: 저장된 길이 없음`);
-      return;
+      broken.push(`${label(stage)}: 저장된 길이 없음`);
+      continue;
     }
-    const w = new World(n, { score: 0, lives: 3, fire: 0 });
-    w.enemies = [];
-    w.mirrors = [];
-    settle(w);
+    const w = newWorld(stage);
     for (const name of route.split(' ')) {
       if (w.state !== 'play') break;
       table[name](w);
     }
-    if (w.state !== 'clear') broken.push(`스테이지 ${n + 1}: 저장된 길로 깨지 못함 (node scripts/solve-levels.mjs ${n + 1} 로 새 길을 찾으세요)`);
-  });
+    if (!isSolved(w, stage)) {
+      const why = w.state === 'clear' ? '룬을 먹지 못함' : '깨지 못함';
+      broken.push(`${label(stage)}: 저장된 길로 ${why} (node scripts/solve-levels.mjs ${stage.id} 로 새 길을 찾으세요)`);
+    }
+  }
   if (broken.length) {
     console.error(broken.join('\n'));
     process.exit(1);
   }
-  console.log(`스테이지 ${LEVELS.length}개 모두 저장된 길로 클리어 확인 (적 제외)`);
+  console.log(`일반 ${LEVELS.length}개(룬 포함)와 비밀 ${SECRET_LEVELS.length}개 모두 저장된 길로 클리어 확인 (적 제외)`);
   process.exit(0);
 }
 
 // 디버그: node scripts/solve-levels.mjs --run 1 walk-R walk-R cast-L ...
 if (process.argv[2] === '--run') {
-  const w = new World(Number(process.argv[3]) - 1, { score: 0, lives: 3, fire: 0 });
-  w.enemies = [];
-  w.mirrors = [];
-  settle(w);
+  const w = newWorld(stageById(process.argv[3]));
   const table = Object.fromEntries(MACROS);
   const cell = () => `(${Math.floor((w.player.x + 6) / TILE) - 1},${Math.floor((w.player.y + 14) / TILE) - 1})`;
   console.log('시작', cell());
   for (const name of process.argv.slice(4)) {
     table[name](w);
-    console.log(name.padEnd(11), cell(), w.state, w.hasKey ? '열쇠' : '', w.player.onGround ? '' : '공중');
+    const flags = [w.hasRune ? '룬' : '', w.hasKey ? '열쇠' : '', w.player.onGround ? '' : '공중'].filter(Boolean);
+    console.log(name.padEnd(11), cell(), w.state, flags.join(' '));
   }
   process.exit(0);
 }
 
-function saveRoute(stage, route) {
+/** 일반 스테이지는 번호순, 비밀 스테이지는 그 뒤에 */
+const routeOrder = (id) => (id.startsWith('S') ? 1000 + Number(id.slice(1)) : Number(id));
+
+function saveRoute(id, route) {
   const file = new URL('./routes.json', import.meta.url);
   const routes = JSON.parse(readFileSync(file, 'utf8'));
-  routes[String(stage)] = route;
-  const sorted = Object.fromEntries(Object.entries(routes).sort((a, b) => Number(a[0]) - Number(b[0])));
+  routes[id] = route;
+  const sorted = Object.fromEntries(Object.entries(routes).sort((a, b) => routeOrder(a[0]) - routeOrder(b[0])));
   writeFileSync(file, JSON.stringify(sorted, null, 2) + '\n');
 }
 
-const pick = process.argv.slice(2).map(Number).filter(Boolean);
-const targets = pick.length ? pick.map((n) => n - 1) : LEVELS.map((_, n) => n);
+const picked = process.argv.slice(2).filter((a) => !a.startsWith('--')).map(stageById);
+if (picked.includes(undefined)) {
+  console.error('스테이지 번호는 1~50 또는 S1~S5 로 적으세요.');
+  process.exit(1);
+}
 let isFailed = false;
-for (const n of targets) {
+for (const stage of picked.length ? picked : STAGES) {
   const t0 = performance.now();
-  const r = solve(n);
+  const seeds = process.argv.includes('--seed')
+    ? JSON.parse(readFileSync(new URL('./routes.json', import.meta.url), 'utf8'))
+    : {};
+  const r = solve(stage, seeds[stage.id] ?? null);
   const ms = Math.round(performance.now() - t0);
   if (r.path) {
-    console.log(`스테이지 ${n + 1}: 풀림 — 동작 ${r.path.length}개, 남은 시간 ${r.timeLeft}초 (탐색 ${r.nodes}, ${ms}ms)`);
+    console.log(`${label(stage)}: 풀림 — 동작 ${r.path.length}개, 남은 시간 ${r.timeLeft}초 (탐색 ${r.nodes}, ${ms}ms)`);
     console.log(`  ${r.path.join(' ')}`);
     // --save 를 주면 찾은 길을 routes.json 에 바로 적는다
-    if (process.argv.includes('--save')) saveRoute(n + 1, r.path.join(' '));
+    if (process.argv.includes('--save')) saveRoute(stage.id, r.path.join(' '));
   } else {
     isFailed = true;
-    console.log(`스테이지 ${n + 1}: 못 찾음 (탐색 ${r.nodes}, ${ms}ms)`);
+    console.log(`${label(stage)}: 못 찾음 (탐색 ${r.nodes}, ${ms}ms)`);
   }
 }
 process.exit(isFailed ? 1 : 0);
