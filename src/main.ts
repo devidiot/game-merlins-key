@@ -5,7 +5,7 @@
  *                                 └ 생명이 남으면 같은 스테이지 소개, 없으면 게임 오버
  *
  * 생명은 프로필에 저장되고 시간이 지나면 찬다 (lives.ts). 스테이지를 시작하고
- * 30초 안에는 생명을 잃지 않고 나갈 수 있고, 그 뒤로 나가면 생명 하나를 잃는다.
+ * 10초 안에는 생명을 잃지 않고 나갈 수 있고, 그 뒤로 나가면 생명 하나를 잃는다.
  *
  * 비밀 스테이지는 스테이지 고르기에서 하나씩 한다. 깨면 결과 화면으로 가고,
  * 다섯 개를 모두 깨면 진짜 엔딩이다. 룬 규칙은 progression.ts 에 있다.
@@ -80,7 +80,7 @@ const INTRO_AUTO_MS = 2600;
 const CLEAR_SHOW_MS = 2200;
 const TIME_BONUS_PER_SECOND = 10;
 /** 스테이지를 시작하고 이 시간(프레임) 안에는 생명을 잃지 않고 나갈 수 있다 */
-const FREE_LEAVE_FRAMES = 30 * 60;
+const FREE_LEAVE_FRAMES = 10 * 60;
 /** HUD 에서 하트·불꽃을 하나씩 그리는 최대 개수. 넘으면 "×N" 으로 줄인다. */
 const MAX_STOCK_ICONS = 8;
 
@@ -316,7 +316,7 @@ function pauseGame(): void {
   showOverlay('pause-screen');
 }
 
-/** 지금 나가거나 다시 시작하면 생명을 잃는지. 30초가 지났거나 이미 쓰러지는 중이면 잃는다. */
+/** 지금 나가거나 다시 시작하면 생명을 잃는지. 10초가 지났거나 이미 쓰러지는 중이면 잃는다. */
 const isLeaveCostly = (): boolean => playFrames >= FREE_LEAVE_FRAMES || world?.state === 'dying';
 
 function refreshPauseMenu(): void {
