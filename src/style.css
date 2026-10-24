@@ -81,36 +81,41 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-.hud-icons {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
+/* 둘째 줄: 왼쪽 생명(하트), 오른쪽 불꽃 */
+.hud-stock {
+  justify-content: space-between;
+  margin-top: 5px;
 }
 
-.hud-chip {
+.stock {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
+  min-height: 16px;
   color: var(--text);
-  font-weight: 700;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
-.hud-chip::before {
-  content: '';
-  width: 16px;
+.stock b {
+  margin-left: 3px;
+}
+
+/* 하트는 7×6, 불꽃은 6×8 픽셀 그림 */
+.stock svg,
+.cost svg {
+  width: 17px;
+  height: 15px;
+  flex: none;
+}
+
+.stock.fire svg {
+  width: 12px;
   height: 16px;
-  display: inline-block;
-  background: var(--icon) center / contain no-repeat;
-  image-rendering: pixelated;
 }
 
-.hud-chip.key {
-  opacity: 0.25;
-}
-
-.hud-chip.key.has-key {
-  opacity: 1;
+.hud-row #btn-pause {
+  margin-left: auto;
 }
 
 .icon-btn {
@@ -328,6 +333,68 @@ button {
   background: rgba(143, 108, 255, 0.3);
 }
 
+/* 점프 버튼 위: 이 스테이지의 열쇠·룬 */
+#stage-items {
+  position: absolute;
+  right: 0;
+  top: calc(var(--btn) * 0.4 - 44px);
+  width: var(--btn);
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.item-slot {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px dashed rgba(185, 166, 255, 0.3);
+  background: rgba(13, 8, 32, 0.5);
+}
+
+.item-slot img,
+.item-slot svg {
+  width: 22px;
+  height: 22px;
+  image-rendering: pixelated;
+  opacity: 0.25;
+  filter: grayscale(1);
+}
+
+.item-slot.is-got {
+  border: 2px solid var(--gold);
+  background: rgba(255, 212, 59, 0.16);
+  box-shadow: 0 0 14px rgba(255, 212, 59, 0.55);
+  animation: item-pop 0.45s ease-out;
+}
+
+.item-slot.rune.is-got {
+  border-color: #b9a6ff;
+  background: rgba(185, 166, 255, 0.18);
+  box-shadow: 0 0 14px rgba(185, 166, 255, 0.7);
+}
+
+.item-slot.is-got img,
+.item-slot.is-got svg {
+  opacity: 1;
+  filter: none;
+}
+
+@keyframes item-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.35);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 .pad-btn.small {
   width: 58px;
   height: 58px;
@@ -362,6 +429,10 @@ button {
     grid-area: buttons;
     align-self: end;
     margin: 0 16px 20px 12px;
+  }
+
+  #stage-items {
+    top: calc(var(--btn) * 0.4 - 52px);
   }
 
   #hud {
@@ -403,6 +474,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* 한국어가 낱말 중간에서 줄바꿈되지 않게 한다 */
+  word-break: keep-all;
 }
 
 .panel.compact {
@@ -486,7 +559,14 @@ h2 {
   box-shadow: 0 3px 0 #3d2c86;
 }
 
-.primary:active {
+.primary:disabled {
+  background: #2b1f63;
+  box-shadow: none;
+  color: var(--muted);
+  cursor: default;
+}
+
+.primary:not(:disabled):active {
   transform: translateY(2px);
   box-shadow: 0 1px 0 #3d2c86;
 }
@@ -843,4 +923,223 @@ textarea[readonly] {
   border-radius: 50%;
   background: rgba(185, 166, 255, 0.6);
   box-shadow: 0 0 12px rgba(185, 166, 255, 0.6);
+}
+
+/* ------------------------------------------------------------ 메인 메뉴·일시정지 */
+
+.panel.menu {
+  gap: 12px;
+}
+
+.player-card {
+  padding: 12px;
+  border-radius: 14px;
+  background: #241a52;
+  border: 1px solid var(--panel-edge);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.player-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #120b2e;
+  display: grid;
+  place-items: center;
+}
+
+.avatar img {
+  width: 28px;
+  height: 28px;
+  image-rendering: pixelated;
+}
+
+.player-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.player-info b {
+  font-size: 17px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#title-stats {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.player-lives {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(185, 166, 255, 0.15);
+}
+
+#title-life-timer {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.player-bonus {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #cdbfff;
+}
+
+.icon-btn.round {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  color: #cdbfff;
+  letter-spacing: 0;
+}
+
+.icon-btn.round svg {
+  width: 22px;
+  height: 22px;
+}
+
+.player-head .icon-btn.round {
+  width: 36px;
+  height: 36px;
+  background: transparent;
+}
+
+.player-head .icon-btn.round svg {
+  width: 18px;
+  height: 18px;
+}
+
+.icon-btn.is-off {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+/* 언어 버튼: 지구본 위에 지금 언어를 작게 붙인다 */
+.lang-toggle {
+  position: relative;
+}
+
+.lang-code {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  min-width: 20px;
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: var(--violet);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 14px;
+}
+
+.icon-row {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.primary.big {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 14px 12px;
+}
+
+.btn-main {
+  font-size: 19px;
+}
+
+.btn-sub {
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.with-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.with-icon > i {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+}
+
+.with-icon > i svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* 일시정지 메뉴에서 생명이 드는 동작 옆에 붙는 표시 */
+.cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 2px;
+  padding: 2px 8px 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 77, 109, 0.16);
+  color: #ff8fa3;
+  font-size: 13px;
+}
+
+.cost svg {
+  width: 12px;
+  height: 11px;
+}
+
+#pause-note {
+  color: #ff8fa3;
+}
+
+#pause-note.is-free {
+  color: #7ee0a8;
+}
+
+.notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(143, 108, 255, 0.12);
+  border: 1px solid rgba(143, 108, 255, 0.35);
+  color: #cdbfff;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+#pause-stage {
+  letter-spacing: 0.06em;
 }

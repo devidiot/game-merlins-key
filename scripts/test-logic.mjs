@@ -1,5 +1,5 @@
 /**
- * 화면과 상관없는 규칙(이름, 공개 일정, 백업 코드)을 시험한다.
+ * 화면과 상관없는 규칙(이름, 공개 일정, 생명, 백업 코드)을 시험한다.
  *
  *   node scripts/test-logic.mjs
  */
@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import { cleanName } from '../src/names.ts';
 import { applyReleases, BATCHES, DAY_MS, lastOpenStage, nextRelease } from '../src/release.ts';
 import { encodeBackup, decodeBackup } from '../src/backup.ts';
-import { newProfile } from '../src/storage.ts';
+import { newProfile, sanitizeProfile } from '../src/storage.ts';
+import { gainLife, LIFE_REFILL_MS, MAX_LIVES, nextLifeAt, refillLives, spendLife } from '../src/lives.ts';
 
 let count = 0;
 const test = async (name, fn) => {
@@ -146,6 +147,78 @@ await test('공개: 시각을 모르면 시간 조건이 필요한 묶음은 열
   assert.equal(lastOpenStage(p), 49);
 });
 
+// ---------------------------------------------------------------- 생명
+
+const HOUR = 60 * 60 * 1000;
+
+await test('생명: 처음에는 5개, 가득 차 있으면 시계가 돌지 않는다', () => {
+  const p = newProfile('a', T0);
+  assert.equal(p.lives, 5);
+  assert.equal(nextLifeAt(p, 5), null);
+  assert.equal(refillLives(p, 5, T0 + 10 * HOUR), false);
+  assert.equal(p.lives, 5);
+});
+
+await test('생명: 상한에서 떨어진 순간부터 2시간마다 1개씩 찬다', () => {
+  const p = newProfile('a', T0);
+  // 가득 찬 채로 하루가 지난 뒤 쓴다: 그 전 시간은 쌓이지 않는다
+  spendLife(p, 5, T0 + 24 * HOUR);
+  spendLife(p, 5, T0 + 24 * HOUR + 1000);
+  assert.equal(p.lives, 3);
+  assert.equal(nextLifeAt(p, 5), T0 + 26 * HOUR);
+  refillLives(p, 5, T0 + 26 * HOUR - 1);
+  assert.equal(p.lives, 3);
+  refillLives(p, 5, T0 + 27 * HOUR);
+  assert.equal(p.lives, 4);
+  assert.equal(nextLifeAt(p, 5), T0 + 28 * HOUR);
+  refillLives(p, 5, T0 + 100 * HOUR);
+  assert.equal(p.lives, 5);
+  assert.equal(nextLifeAt(p, 5), null);
+});
+
+await test('생명: 0개가 되면 2시간 뒤 1개', () => {
+  const p = newProfile('a', T0);
+  for (let i = 0; i < 6; i++) spendLife(p, 5, T0);
+  assert.equal(p.lives, 0);
+  refillLives(p, 5, T0 + LIFE_REFILL_MS);
+  assert.equal(p.lives, 1);
+});
+
+await test('생명: 요정으로는 상한을 넘지만 시간으로는 넘지 않는다', () => {
+  const p = newProfile('a', T0);
+  gainLife(p, 5, T0);
+  gainLife(p, 5, T0);
+  assert.equal(p.lives, 7);
+  refillLives(p, 5, T0 + 10 * HOUR);
+  assert.equal(p.lives, 7);
+  // 상한 위에서 쓰면 시계가 돌지 않고, 상한 아래로 떨어진 뒤부터 돈다
+  spendLife(p, 5, T0 + 10 * HOUR);
+  spendLife(p, 5, T0 + 10 * HOUR);
+  assert.equal(nextLifeAt(p, 5), null);
+  spendLife(p, 5, T0 + 11 * HOUR);
+  assert.equal(nextLifeAt(p, 5), T0 + 13 * HOUR);
+  for (let i = 0; i < 30; i++) gainLife(p, 5, T0);
+  assert.equal(p.lives, MAX_LIVES);
+});
+
+await test('생명: 룬 보너스로 상한이 오르면 그만큼 더 찬다', () => {
+  const p = newProfile('a', T0);
+  refillLives(p, 6, T0);
+  refillLives(p, 6, T0 + LIFE_REFILL_MS);
+  assert.equal(p.lives, 6);
+});
+
+await test('생명: 생명이 없던 예전 기록은 가득 찬 채로 읽는다', () => {
+  const old = newProfile('a', T0);
+  delete old.lives;
+  delete old.livesAt;
+  delete old.isMidStage;
+  const p = sanitizeProfile(old, T0 + HOUR);
+  assert.equal(p.lives, 5);
+  assert.equal(p.livesAt, T0 + HOUR);
+  assert.equal(p.isMidStage, false);
+});
+
 // ---------------------------------------------------------------- 백업 코드
 
 await test('백업: 코드로 바꿨다가 되돌리면 같은 기록', async () => {
@@ -177,4 +250,4 @@ await test('백업: 글자가 바뀌거나 형식이 틀리면 거절', async ()
   assert.equal((await decodeBackup('MK1..00000000', T0)).error, 'format');
 });
 
-console.log(`규칙 시험 ${count}개 통과 (이름, 공개 일정, 백업 코드)`);
+console.log(`규칙 시험 ${count}개 통과 (이름, 공개 일정, 생명, 백업 코드)`);

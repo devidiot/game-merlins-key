@@ -9,7 +9,8 @@
  * 둘러져 있어서 전체 격자는 17 × 14 칸이다.
  */
 import { LEVEL_COLS, LEVEL_ROWS, type LevelDef } from './levels.ts';
-import { MAX_FIRE, MAX_LIVES } from '../progression.ts';
+import { MAX_FIRE } from '../progression.ts';
+import { MAX_LIVES } from '../lives.ts';
 
 export const TILE = 16;
 export const GRID_W = LEVEL_COLS + 2;

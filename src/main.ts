@@ -1,13 +1,16 @@
 /**
  * 화면 흐름과 게임 루프.
  *
- * 타이틀 → 스테이지 소개 → 플레이 → (클리어 → 다음 스테이지 소개) … → 엔딩
- *                              └ 목숨이 남으면 같은 스테이지 소개, 없으면 게임 오버
+ * 메인 메뉴 → 스테이지 소개 → 플레이 → (클리어 → 다음 스테이지 소개) … → 엔딩
+ *                                 └ 생명이 남으면 같은 스테이지 소개, 없으면 게임 오버
+ *
+ * 생명은 프로필에 저장되고 시간이 지나면 찬다 (lives.ts). 스테이지를 시작하고
+ * 30초 안에는 생명을 잃지 않고 나갈 수 있고, 그 뒤로 나가면 생명 하나를 잃는다.
  *
  * 비밀 스테이지는 스테이지 고르기에서 하나씩 한다. 깨면 결과 화면으로 가고,
  * 다섯 개를 모두 깨면 진짜 엔딩이다. 룬 규칙은 progression.ts 에 있다.
  *
- * 처음 실행하면 (휴대폰 브라우저라면 홈 화면 설치 안내 →) 이름 등록 → 타이틀 순이다.
+ * 처음 실행하면 (휴대폰 브라우저라면 홈 화면 설치 안내 →) 이름 등록 → 메인 메뉴 순이다.
  * 스테이지는 묶음으로 공개되며 그 규칙은 release.ts 에 있다.
  *
  * 게임 로직은 60fps 고정 간격으로 돌리고, 그림은 화면 주사율대로 그린다.
@@ -21,7 +24,33 @@ import { blockZoom } from './no-zoom.ts';
 import { VIEW_H, VIEW_W, World, type GameEvent, type Session } from './game/world.ts';
 import { Renderer } from './render/renderer.ts';
 import { sprite } from './render/sprites.ts';
-import { chapterOf, chapterRunes, isSecretUnlocked, isTrueEnding, runeBonus, startingKit } from './progression.ts';
+import {
+  chapterOf,
+  chapterRunes,
+  isSecretUnlocked,
+  isTrueEnding,
+  lifeCap,
+  runeBonus,
+  startingFire,
+} from './progression.ts';
+import { gainLife, nextLifeAt, refillLives, spendLife } from './lives.ts';
+import {
+  FLAME,
+  FLAME_EMPTY,
+  HEART,
+  HEART_EMPTY,
+  ICON_BACKUP,
+  ICON_EDIT,
+  ICON_GLOBE,
+  ICON_GRID,
+  ICON_HELP,
+  ICON_HOME,
+  ICON_PLAY,
+  ICON_RESTART,
+  ICON_SOUND_OFF,
+  ICON_SOUND_ON,
+  RUNE,
+} from './icons.ts';
 import { decodeBackup, encodeBackup } from './backup.ts';
 import { seedServerTime, serverNow, syncServerTime } from './clock.ts';
 import { canPromptInstall, isIOS, onInstallChange, promptInstall, shouldSuggestInstall } from './install.ts';
@@ -50,6 +79,10 @@ const STEP_MS = 1000 / 60;
 const INTRO_AUTO_MS = 2600;
 const CLEAR_SHOW_MS = 2200;
 const TIME_BONUS_PER_SECOND = 10;
+/** 스테이지를 시작하고 이 시간(프레임) 안에는 생명을 잃지 않고 나갈 수 있다 */
+const FREE_LEAVE_FRAMES = 30 * 60;
+/** HUD 에서 하트·불꽃을 하나씩 그리는 최대 개수. 넘으면 "×N" 으로 줄인다. */
+const MAX_STOCK_ICONS = 8;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -87,6 +120,8 @@ let current: StageRef = { isSecret: false, index: 0 };
 let world: World | null = null;
 let introTimer = 0;
 let clearTimer = 0;
+/** 이번 시도에서 실제로 플레이한 시간(프레임). 일시정지 중에는 늘지 않는다. */
+let playFrames = 0;
 
 // ---------------------------------------------------------------- 화면 전환
 
@@ -118,33 +153,109 @@ function goTitle(): void {
 /** 지금 할 수 있는 가장 뒤 스테이지 (공개 범위와 만든 스테이지 수 안에서) */
 const playableLast = (): number => Math.min(lastOpenStage(progress), LEVELS.length - 1);
 
-function refreshTitle(): void {
-  $('title-player').textContent = progress.name;
-  $('title-browser-warning').classList.toggle('hidden', !shouldSuggestInstall());
+/** 생명 상한 (기본 5개에 룬 보너스를 더한다) */
+const cap = (): number => lifeCap(progress.runes.length);
 
-  const cont = $<HTMLButtonElement>('btn-continue');
-  const next = progress.unlocked;
-  const isWaiting = next > playableLast();
-  cont.classList.toggle('hidden', next === 0);
-  cont.disabled = isWaiting;
-  if (!isWaiting) {
-    cont.textContent = t('continueFrom', { n: next + 1 });
-  } else {
-    const info = nextRelease(progress);
-    const isBuilt = next < LEVELS.length;
-    cont.textContent =
-      info?.earliestAt && isBuilt ? t('continueWait', { date: formatDate(info.earliestAt) }) : t('comingSoon');
-  }
-  const release = titleNotice ?? releaseLines();
-  $('title-release').textContent = release.join('\n');
-  $('title-release').classList.toggle('hidden', release.length === 0);
-  $('title-best').textContent = progress.best > 0 ? `${t('best')} ${progress.best.toLocaleString()}` : '';
+/** 흐른 시간만큼 생명을 채운다 */
+function refreshLives(): void {
+  if (progress.name && refillLives(progress, cap(), stampNow())) saveStore();
+}
+
+/** 남은 시간을 "2일 3시간 12분" 처럼 적는다. 1분보다 적게 남아도 1분으로 보여 준다. */
+function formatLeft(ms: number): string {
+  const totalMin = Math.max(1, Math.ceil(ms / 60000));
+  const d = Math.floor(totalMin / 1440);
+  const h = Math.floor((totalMin % 1440) / 60);
+  const m = totalMin % 60;
+  const parts: string[] = [];
+  if (d) parts.push(t('durDay', { n: d }));
+  if (h) parts.push(t('durHour', { n: h }));
+  if (m || parts.length === 0) parts.push(t('durMin', { n: m }));
+  return parts.join(' ');
+}
+
+/** 하트·불꽃을 개수만큼 그린다. slots 까지는 빈 자리로 채운다. */
+function paintStock(el: HTMLElement, count: number, slots: number, full: string, empty: string, label: string): void {
+  el.innerHTML =
+    Math.max(count, slots) > MAX_STOCK_ICONS
+      ? `${full}<b>×${count}</b>`
+      : full.repeat(count) + empty.repeat(Math.max(0, slots - count));
+  el.setAttribute('aria-label', label);
+}
+
+const paintHearts = (el: HTMLElement, lives: number): void =>
+  paintStock(el, lives, cap(), HEART, HEART_EMPTY, t('livesCount', { n: lives }));
+
+function refreshTitle(): void {
+  refreshLives();
+  $('title-player').textContent = progress.name;
+  const stats = [t('runesTotal', { got: progress.runes.length, total: runeTotal() })];
+  if (progress.best > 0) stats.unshift(t('bestShort', { n: progress.best.toLocaleString() }));
+  $('title-stats').textContent = stats.join(' · ');
+  paintHearts($('title-hearts'), progress.lives);
+  const nextLife = nextLifeAt(progress, cap());
+  $('title-life-timer').textContent =
+    nextLife === null ? t('livesFull') : t('lifeTimer', { time: formatLeft(nextLife - stampNow()) });
   const bonus = runeBonus(progress.runes.length);
   $('title-bonus').textContent = t('runeBonus', { n: bonus.lives });
   $('title-bonus').classList.toggle('hidden', bonus.lives === 0);
-  const soundLabel = t(prefs.isSoundOn ? 'soundOn' : 'soundOff');
-  $('btn-sound').textContent = soundLabel;
-  $('btn-sound2').textContent = soundLabel;
+  $('title-browser-warning').classList.toggle('hidden', !shouldSuggestInstall());
+  refreshPlayButton();
+  const release = titleNotice ?? releaseLines();
+  $('title-release').textContent = release.join('\n');
+  $('title-release').classList.toggle('hidden', release.length === 0);
+  refreshToggles();
+}
+
+/**
+ * 메인 메뉴의 큰 버튼. 다음에 할 스테이지를 바로 시작한다.
+ * 다음 스테이지가 아직 안 열렸거나 생명이 없으면 언제 할 수 있는지 보여 주고 막아 둔다.
+ */
+function refreshPlayButton(): void {
+  const next = progress.unlocked;
+  let main: string;
+  let sub: string;
+  let isBlocked = true;
+  if (next > playableLast()) {
+    main = t('nextStage', { n: next + 1 });
+    sub = waitText();
+  } else if (progress.lives <= 0) {
+    main = t('outOfLives');
+    sub = t('nextLifeIn', { time: formatLeft((nextLifeAt(progress, cap()) ?? 0) - stampNow()) });
+  } else {
+    main = t(next === 0 ? 'newGame' : 'continueGame');
+    sub = t('playSub', { n: next + 1, name: t(`stage${next + 1}` as MessageKey) });
+    isBlocked = false;
+  }
+  $('play-main').textContent = main;
+  $('play-sub').textContent = sub;
+  $<HTMLButtonElement>('btn-play').disabled = isBlocked;
+}
+
+/** 다음 스테이지가 열리기까지 남은 시간. 시간이 됐는데 아직 만들지 않았으면 "준비 중" */
+function waitText(): string {
+  // 공개는 됐는데 아직 만들지 않은 스테이지
+  if (progress.unlocked <= lastOpenStage(progress)) return t('comingSoon');
+  const info = nextRelease(progress);
+  if (!info || info.earliestAt === null) return t('comingSoon');
+  const left = info.earliestAt - stampNow();
+  if (left > 0) return t('opensIn', { time: formatLeft(left) });
+  return isBatchBuilt(info.batch) ? t('opensSoon') : t('comingSoon');
+}
+
+/** 소리·언어 아이콘 버튼을 지금 설정에 맞춘다 */
+function refreshToggles(): void {
+  document.querySelectorAll<HTMLButtonElement>('.sound-toggle').forEach((b) => {
+    b.innerHTML = prefs.isSoundOn ? ICON_SOUND_ON : ICON_SOUND_OFF;
+    b.classList.toggle('is-off', !prefs.isSoundOn);
+    b.setAttribute('aria-label', t(prefs.isSoundOn ? 'soundOff' : 'soundOn'));
+    b.title = b.getAttribute('aria-label') ?? '';
+  });
+  document.querySelectorAll<HTMLButtonElement>('.lang-toggle').forEach((b) => {
+    b.innerHTML = `${ICON_GLOBE}<span class="lang-code">${getLang() === 'ko' ? '한' : 'EN'}</span>`;
+    b.setAttribute('aria-label', t('languageSwitch', { lang: LANG_NAMES[getLang()] }));
+    b.title = b.getAttribute('aria-label') ?? '';
+  });
   document.querySelectorAll<HTMLButtonElement>('.lang-btn').forEach((b) => {
     b.setAttribute('aria-pressed', String(b.dataset.lang === getLang()));
   });
@@ -158,17 +269,23 @@ const nameKey = (ref: StageRef): MessageKey =>
 
 function startGame(ref: StageRef): void {
   unlockAudio();
+  refreshLives();
+  if (progress.lives <= 0) {
+    goTitle();
+    return;
+  }
   titleNotice = null;
-  // 룬 10개마다 목숨과 불꽃을 하나씩 더 들고 시작한다
-  const kit = startingKit(progress.runes.length);
-  session = { score: 0, lives: kit.lives, fire: kit.fire };
+  // 룬 10개마다 불꽃을 하나씩 더 들고 시작한다
+  session = { score: 0, lives: progress.lives, fire: startingFire(progress.runes.length) };
   current = ref;
   showIntro();
 }
 
 function showIntro(): void {
+  session.lives = progress.lives;
   world = new World(levelOf(current), session);
   screen = 'intro';
+  playFrames = 0;
   controls.reset();
   $('intro-no').textContent = current.isSecret
     ? `${t('secret')} ${current.index + 1}`
@@ -195,8 +312,21 @@ function pauseGame(): void {
   if (screen !== 'play') return;
   screen = 'paused';
   controls.reset();
-  refreshTitle();
+  refreshPauseMenu();
   showOverlay('pause-screen');
+}
+
+/** 지금 나가거나 다시 시작하면 생명을 잃는지. 30초가 지났거나 이미 쓰러지는 중이면 잃는다. */
+const isLeaveCostly = (): boolean => playFrames >= FREE_LEAVE_FRAMES || world?.state === 'dying';
+
+function refreshPauseMenu(): void {
+  $('pause-stage').textContent = `${current.isSecret ? t('secret') : t('stage')} ${shortLabel(current)} · ${t(nameKey(current))}`;
+  const isCostly = isLeaveCostly();
+  document.querySelectorAll<HTMLElement>('#pause-screen .cost').forEach((el) => el.classList.toggle('hidden', !isCostly));
+  const left = Math.ceil((FREE_LEAVE_FRAMES - playFrames) / 60);
+  $('pause-note').textContent = isCostly ? t('lifeCost') : t('freeLeave', { n: left });
+  $('pause-note').classList.toggle('is-free', !isCostly);
+  refreshToggles();
 }
 
 function resumeGame(): void {
@@ -207,14 +337,30 @@ function resumeGame(): void {
 }
 
 function loseLife(): void {
-  session.lives--;
-  if (session.lives <= 0) gameOver();
+  spendLife(progress, cap(), stampNow());
+  progress.isMidStage = false;
+  session.lives = progress.lives;
+  saveStore();
+  if (progress.lives <= 0) gameOver();
   else showIntro();
+}
+
+/**
+ * 스테이지 도중에 앱을 닫았던 기록이 있으면 생명 하나를 뺀다. 메뉴로 나갈 때와
+ * 같은 규칙이다. 빠진 사실은 메인 메뉴에 알린다.
+ */
+function settleAway(): void {
+  if (!progress.isMidStage) return;
+  progress.isMidStage = false;
+  spendLife(progress, cap(), stampNow());
+  saveStore();
+  titleNotice = [...(titleNotice ?? []), t('lifeLostAway')];
 }
 
 function stageClear(): void {
   if (!world) return;
   screen = 'clear';
+  progress.isMidStage = false;
   const bonus = Math.ceil(world.timeLeft / 60) * TIME_BONUS_PER_SECOND;
   session.score += bonus;
   const notes: string[] = [];
@@ -298,6 +444,7 @@ function finish(ending: Ending): void {
 
   const { title, text } = ENDING_TEXT[ending];
   let body = text ? t(text) : '';
+  if (ending === 'gameOver' && progress.lives <= 0) body = t('gameOverText');
   // 일반 스테이지를 다 깼는데 룬이 모자라면 비밀 스테이지를 귀띔한다
   if (ending === 'allClear' && progress.runes.length < runeTotal()) body += `\n\n${t('allClearHint')}`;
   if (ending === 'waiting') body = releaseLines().join('\n');
@@ -311,11 +458,19 @@ function finish(ending: Ending): void {
   showOverlay('end-screen');
 }
 
+const hasRune = (level: LevelDef): boolean => /[r5]/.test(level.map.join(''));
+
 function runeTotal(): number {
-  return LEVELS.filter((l) => /[r5]/.test(l.map.join(''))).length;
+  return LEVELS.filter(hasRune).length;
 }
 
 function openStages(): void {
+  refreshLives();
+  const isOut = progress.lives <= 0;
+  $('stages-lives').textContent = isOut
+    ? t('noLivesStages', { time: formatLeft((nextLifeAt(progress, cap()) ?? 0) - stampNow()) })
+    : '';
+  $('stages-lives').classList.toggle('hidden', !isOut);
   const grid = $('stage-grid');
   grid.replaceChildren();
   LEVELS.forEach((_, n) => {
@@ -323,7 +478,7 @@ function openStages(): void {
     b.className = 'stage-cell';
     b.textContent = String(n + 1);
     const isReleased = n <= lastOpenStage(progress);
-    b.disabled = n > progress.unlocked || !isReleased;
+    b.disabled = n > progress.unlocked || !isReleased || isOut;
     b.title = b.disabled ? t('locked') : t(`stage${n + 1}` as MessageKey);
     // 다음 묶음의 첫 칸에 남은 날짜나 조건을 적는다
     if (!isReleased && n === lastOpenStage(progress) + 1) {
@@ -352,7 +507,7 @@ function openStages(): void {
     const sub = document.createElement('small');
     sub.textContent = isOpen ? t(`secret${i + 1}` as MessageKey) : t('chapterRunes', { got, total });
     b.append(label, sub);
-    b.disabled = !isOpen;
+    b.disabled = !isOpen || isOut;
     b.classList.toggle('is-cleared', progress.secretsCleared.includes(i));
     b.addEventListener('click', () => startGame({ isSecret: true, index: i }));
     secrets.append(b);
@@ -380,7 +535,13 @@ const isBatchBuilt = (batch: number): boolean => BATCHES[batch].first < LEVELS.l
 function releaseLines(): string[] {
   const info = nextRelease(progress);
   if (!info) return [];
-  if (!isBatchBuilt(info.batch)) return progress.unlocked >= LEVELS.length ? [t('comingSoon')] : [];
+  // 공개는 됐는데 아직 만들지 않은 스테이지에서 멈춰 있다
+  if (progress.unlocked >= LEVELS.length && progress.unlocked <= lastOpenStage(progress)) return [t('comingSoon')];
+  if (!isBatchBuilt(info.batch)) {
+    // 아직 만들지 않은 묶음도 열릴 날짜는 알려 준다. 그날이 지났으면 "준비 중"
+    if (progress.unlocked < LEVELS.length) return [];
+    if (info.earliestAt === null || info.earliestAt <= stampNow()) return [t('comingSoon')];
+  }
   const range = stageRange(info.batch);
   const last = BATCHES[info.batch - 1].last + 1;
   const lines: string[] = [];
@@ -499,6 +660,7 @@ function enterAs(name: string): void {
   progress = selectProfile(name, stampNow());
   const before = progress.openedAt.length;
   if (applyReleases(progress, serverNow())) titleNotice = openedNotes(before);
+  settleAway();
   saveStore();
   goTitle();
 }
@@ -580,7 +742,6 @@ $('btn-backup-close').addEventListener('click', () => {
 
 // ---------------------------------------------------------------- 버튼 연결
 
-$('btn-start').addEventListener('click', () => startGame({ isSecret: false, index: 0 }));
 $('btn-change-name').addEventListener('click', showNameScreen);
 $('btn-name-back').addEventListener('click', goTitle);
 $('btn-backup').addEventListener('click', () => void showBackup('title-screen'));
@@ -588,7 +749,7 @@ $('btn-name-backup').addEventListener('click', () => void showBackup('name-scree
 $('btn-install-how').addEventListener('click', showInstall);
 $('btn-install').addEventListener('click', () => void promptInstall());
 $('btn-install-skip').addEventListener('click', leaveInstall);
-$('btn-continue').addEventListener('click', () =>
+$('btn-play').addEventListener('click', () =>
   startGame({ isSecret: false, index: Math.min(progress.unlocked, playableLast()) }),
 );
 $('btn-stages').addEventListener('click', openStages);
@@ -612,13 +773,16 @@ $('intro-screen').addEventListener('pointerdown', () => {
 $('btn-pause').addEventListener('click', pauseGame);
 $('btn-resume').addEventListener('click', resumeGame);
 $('btn-restart').addEventListener('click', () => {
-  if (screen === 'paused') loseLife();
+  if (screen !== 'paused') return;
+  if (isLeaveCostly()) loseLife();
+  else showIntro();
 });
 $('btn-quit').addEventListener('click', () => {
-  if (session.score > progress.best) {
-    progress.best = session.score;
-    saveStore();
-  }
+  if (screen !== 'paused') return;
+  if (isLeaveCostly()) spendLife(progress, cap(), stampNow());
+  progress.isMidStage = false;
+  if (session.score > progress.best) progress.best = session.score;
+  saveStore();
   goTitle();
 });
 $('btn-end-ok').addEventListener('click', goTitle);
@@ -627,22 +791,48 @@ const toggleSound = () => {
   prefs.isSoundOn = !prefs.isSoundOn;
   setSoundEnabled(prefs.isSoundOn);
   saveStore();
-  refreshTitle();
+  refreshToggles();
 };
 $('btn-sound').addEventListener('click', toggleSound);
 $('btn-sound2').addEventListener('click', toggleSound);
 
+function changeLang(lang: Lang): void {
+  prefs.lang = lang;
+  saveStore();
+  setLang(lang);
+  refreshTitle();
+  refreshNameScreen();
+  if (screen === 'paused') refreshPauseMenu();
+}
+
 document.querySelectorAll<HTMLButtonElement>('.lang-btn').forEach((b) => {
   const lang = b.dataset.lang as Lang;
   b.textContent = LANG_NAMES[lang];
-  b.addEventListener('click', () => {
-    prefs.lang = lang;
-    saveStore();
-    setLang(lang);
-    refreshTitle();
-    refreshNameScreen();
-  });
+  b.addEventListener('click', () => changeLang(lang));
 });
+document.querySelectorAll<HTMLButtonElement>('.lang-toggle').forEach((b) => {
+  b.addEventListener('click', () => changeLang(getLang() === 'ko' ? 'en' : 'ko'));
+});
+
+const ICONS: Record<string, string> = {
+  edit: ICON_EDIT,
+  help: ICON_HELP,
+  backup: ICON_BACKUP,
+  play: ICON_PLAY,
+  restart: ICON_RESTART,
+  home: ICON_HOME,
+  grid: ICON_GRID,
+};
+document.querySelectorAll<HTMLElement>('[data-icon]').forEach((el) => {
+  el.innerHTML = ICONS[el.dataset.icon ?? ''] ?? '';
+});
+document.querySelectorAll<HTMLElement>('#pause-screen .cost').forEach((el) => {
+  el.innerHTML = `${HEART}<span>−1</span>`;
+});
+const avatar = document.createElement('img');
+avatar.src = sprite('merlinStand').toDataURL();
+avatar.alt = '';
+$('title-avatar').append(avatar);
 
 // 다른 앱으로 넘어가면 멈춘다
 document.addEventListener('visibilitychange', () => {
@@ -660,26 +850,43 @@ const hud = {
   score: $('hud-score'),
   lives: $('hud-lives'),
   fire: $('hud-fire'),
-  key: $('hud-key'),
+  key: $('item-key'),
+  rune: $('item-rune'),
   timeFill: $('time-fill'),
   timeText: $('time-text'),
 };
-hud.lives.style.setProperty('--icon', `url(${sprite('merlinStand').toDataURL()})`);
-hud.fire.style.setProperty('--icon', `url(${sprite('jar').toDataURL()})`);
-hud.key.style.setProperty('--icon', `url(${sprite('key').toDataURL()})`);
+const keyIcon = document.createElement('img');
+keyIcon.src = sprite('key').toDataURL();
+keyIcon.alt = '';
+hud.key.append(keyIcon);
+hud.rune.innerHTML = RUNE;
 
 let lastHud = '';
 function updateHud(): void {
   if (!world) return;
   const seconds = Math.ceil(world.timeLeft / 60);
-  const sig = [shortLabel(current), session.score, session.lives, session.fire, world.hasKey, seconds, getLang()].join('|');
+  const sig = [
+    shortLabel(current),
+    session.score,
+    session.lives,
+    session.fire,
+    world.hasKey,
+    world.hasRune,
+    seconds,
+    getLang(),
+  ].join('|');
   if (sig === lastHud) return;
   lastHud = sig;
   hud.stage.textContent = shortLabel(current);
   hud.score.textContent = session.score.toLocaleString();
-  hud.lives.textContent = String(session.lives);
-  hud.fire.textContent = String(session.fire);
-  hud.key.classList.toggle('has-key', world.hasKey);
+  paintHearts(hud.lives, session.lives);
+  // 불꽃이 없어도 자리는 보이도록 빈 불꽃 하나를 둔다
+  paintStock(hud.fire, session.fire, Math.max(1, session.fire), FLAME, FLAME_EMPTY, t('fireCount', { n: session.fire }));
+  hud.key.classList.toggle('is-got', world.hasKey);
+  hud.key.setAttribute('aria-label', t(world.hasKey ? 'keyLabel' : 'keyMissing'));
+  hud.rune.classList.toggle('hidden', !hasRune(world.level));
+  hud.rune.classList.toggle('is-got', world.hasRune);
+  hud.rune.setAttribute('aria-label', t(world.hasRune ? 'runeLabel' : 'runeMissing'));
   const ratio = Math.min(1, world.timeLeft / (world.level.time * 60));
   hud.timeFill.style.transform = `scaleX(${ratio})`;
   hud.timeFill.classList.toggle('is-low', seconds <= 10);
@@ -731,7 +938,18 @@ function frame(now: number): void {
   while (acc >= STEP_MS) {
     acc -= STEP_MS;
     if (screen === 'play' && world) {
+      if (world.state === 'play' && ++playFrames === FREE_LEAVE_FRAMES) {
+        // 이제부터 나가면 생명을 잃는다. 앱을 꺼서 피하지 못하게 기록해 둔다.
+        progress.isMidStage = true;
+        saveStore();
+      }
       for (const e of world.step(controls.read())) handleEvent(e);
+      if (session.lives > progress.lives) {
+        // 요정을 잡았다
+        gainLife(progress, cap(), stampNow());
+        session.lives = progress.lives;
+        saveStore();
+      }
       if (world.isDyingDone) {
         loseLife();
         break;
@@ -753,13 +971,24 @@ function frame(now: number): void {
 }
 
 applyI18n(document);
-// 이름이 있으면 타이틀로, 없으면 (휴대폰 브라우저라면 설치 안내를 거쳐) 이름 등록으로
+// 이름이 있으면 메인 메뉴로, 없으면 (휴대폰 브라우저라면 설치 안내를 거쳐) 이름 등록으로
+settleAway();
 if (progress.name) goTitle();
 else if (shouldSuggestInstall()) showInstall();
 else showNameScreen();
 layout();
 void checkReleases();
 window.setInterval(() => void checkReleases(), 5 * 60 * 1000);
+// 메인 메뉴의 남은 시간(생명 충전, 다음 스테이지 공개)을 매초 고친다
+window.setInterval(() => {
+  if (screen !== 'title' || $('title-screen').classList.contains('hidden')) return;
+  const before = progress.openedAt.length;
+  if (progress.name && applyReleases(progress, serverNow())) {
+    titleNotice = openedNotes(before);
+    saveStore();
+  }
+  refreshTitle();
+}, 1000);
 
 // 개발 서버에서만: ?stage=3 이나 ?stage=S2 로 열면 그 스테이지를 바로 시작한다
 if (import.meta.env.DEV) {

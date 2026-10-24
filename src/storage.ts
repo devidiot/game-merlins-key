@@ -8,6 +8,8 @@
  * 읽기·쓰기 실패는 모두 조용히 넘긴다.
  */
 
+import { BASE_LIFE_CAP, MAX_LIVES } from './lives.ts';
+
 const STORAGE_KEY = 'merlins-key:v2';
 /** 이름 기능이 생기기 전의 기록. 처음 등록하는 이름이 이어받는다. */
 const LEGACY_KEY = 'merlins-key:v1';
@@ -33,6 +35,15 @@ export interface Profile {
   runeAt: Record<string, number>;
   /** 공개 묶음이 열린 시각. openedAt[0] 은 처음 시작한 시각이다. release.ts 참고 */
   openedAt: number[];
+  /** 남은 생명. 시간이 지나면 찬다 (lives.ts) */
+  lives: number;
+  /** 생명 충전 시계의 기준 시각 (서버 기준 ms) */
+  livesAt: number;
+  /**
+   * 스테이지를 30초 넘게 하는 중인지. 그 상태로 앱을 닫으면 다음에 열 때
+   * 생명 하나를 뺀다. 메뉴로 나갈 때와 같은 규칙을 앱을 꺼서 피하지 못하게 한다.
+   */
+  isMidStage: boolean;
 }
 
 export interface Settings {
@@ -68,6 +79,9 @@ export function newProfile(name: string, now: number): Profile {
     clearedAt: {},
     runeAt: {},
     openedAt: [now],
+    lives: BASE_LIFE_CAP,
+    livesAt: now,
+    isMidStage: false,
   };
 }
 
@@ -88,6 +102,10 @@ export function sanitizeProfile(raw: unknown, fallbackNow: number): Profile | nu
     clearedAt: times(d.clearedAt),
     runeAt: times(d.runeAt),
     openedAt: openedAt.length ? openedAt : [createdAt],
+    // 생명이 생기기 전 기록은 가득 찬 채로 시작한다
+    lives: Number.isInteger(d.lives) ? Math.min(MAX_LIVES, Math.max(0, Number(d.lives))) : BASE_LIFE_CAP,
+    livesAt: Number.isFinite(d.livesAt) ? Number(d.livesAt) : fallbackNow,
+    isMidStage: d.isMidStage === true,
   };
 }
 
@@ -95,7 +113,7 @@ const defaultSettings = (): Settings => ({ lang: null, isSoundOn: true, lastServ
 
 let store: Store = { profiles: {}, currentName: null, settings: defaultSettings() };
 /** 이름 기능 전의 기록. 첫 이름을 등록할 때 넘겨주고 지운다. */
-let legacy: Omit<Profile, 'name' | 'createdAt' | 'openedAt' | 'clearedAt' | 'runeAt'> | null = null;
+let legacy: Pick<Profile, 'unlocked' | 'best' | 'runes' | 'secretsCleared'> | null = null;
 
 export function loadStore(): void {
   try {

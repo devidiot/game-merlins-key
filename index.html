@@ -27,12 +27,11 @@
         <div class="hud-row">
           <span class="hud-item"><span data-i18n="stage">STAGE</span> <b id="hud-stage">1</b></span>
           <span class="hud-item"><span data-i18n="score">SCORE</span> <b id="hud-score">0</b></span>
-          <span class="hud-item hud-icons">
-            <span id="hud-lives" class="hud-chip" data-i18n-aria="lives"></span>
-            <span id="hud-fire" class="hud-chip fire" data-i18n-aria="fire"></span>
-            <span id="hud-key" class="hud-chip key"></span>
-          </span>
           <button id="btn-pause" class="icon-btn" data-i18n-aria="pause">II</button>
+        </div>
+        <div class="hud-row hud-stock">
+          <span id="hud-lives" class="stock" role="img"></span>
+          <span id="hud-fire" class="stock fire" role="img"></span>
         </div>
         <div id="time-bar"><div id="time-fill"></div><span id="time-text">0</span></div>
       </header>
@@ -52,6 +51,11 @@
           <span class="arrow right"></span>
         </div>
         <div id="buttons">
+          <!-- 이 스테이지에서 열쇠와 룬을 얻었는지 -->
+          <div id="stage-items">
+            <span id="item-key" class="item-slot" role="img"></span>
+            <span id="item-rune" class="item-slot rune" role="img"></span>
+          </div>
           <button id="btn-fire" class="pad-btn small" data-i18n="fire">Fire</button>
           <button id="btn-block" class="pad-btn block" data-i18n="block">Block</button>
           <button id="btn-jump" class="pad-btn jump" data-i18n="jump">Jump</button>
@@ -125,34 +129,41 @@
         </div>
       </section>
 
-      <!-- 타이틀 -->
+      <!-- 메인 메뉴 -->
       <section id="title-screen" class="overlay">
-        <div class="panel">
+        <div class="panel menu">
           <h1 class="logo">Merlin's<br /><span>Key</span></h1>
           <p class="tag" data-i18n="tagline"></p>
-          <div class="player-row">
-            <span data-i18n="player"></span>
-            <b id="title-player"></b>
-            <button id="btn-change-name" class="ghost small" data-i18n="changeName"></button>
+          <div class="player-card">
+            <div class="player-head">
+              <span id="title-avatar" class="avatar" aria-hidden="true"></span>
+              <div class="player-info">
+                <b id="title-player"></b>
+                <span id="title-stats"></span>
+              </div>
+              <button id="btn-change-name" class="icon-btn round" data-icon="edit" data-i18n-aria="changeName"></button>
+            </div>
+            <div class="player-lives">
+              <span id="title-hearts" class="stock" role="img"></span>
+              <span id="title-life-timer"></span>
+            </div>
+            <p id="title-bonus" class="player-bonus hidden"></p>
           </div>
           <p id="title-browser-warning" class="warning hidden">
             <span data-i18n="browserWarning"></span>
             <button id="btn-install-how" class="link-btn" data-i18n="browserWarningHow"></button>
           </p>
-          <p id="title-release" class="tag small release hidden"></p>
-          <button id="btn-start" class="primary" data-i18n="start">Start</button>
-          <button id="btn-continue" class="primary hidden"></button>
-          <button id="btn-stages" class="ghost" data-i18n="stageSelect">Stages</button>
-          <button id="btn-howto" class="ghost" data-i18n="howToPlay">How to play</button>
-          <button id="btn-backup" class="ghost" data-i18n="backup"></button>
-          <p id="title-best" class="tag small"></p>
-          <p id="title-bonus" class="tag small rune hidden"></p>
-          <div class="row">
-            <button id="btn-sound" class="ghost small"></button>
-          </div>
-          <div class="lang-switch" role="group" data-i18n-aria="language">
-            <button class="lang-btn" data-lang="en">English</button>
-            <button class="lang-btn" data-lang="ko">한국어</button>
+          <button id="btn-play" class="primary big">
+            <span id="play-main" class="btn-main"></span>
+            <span id="play-sub" class="btn-sub"></span>
+          </button>
+          <button id="btn-stages" class="ghost with-icon"><i data-icon="grid"></i><span data-i18n="stageSelect"></span></button>
+          <p id="title-release" class="notice hidden"></p>
+          <div class="icon-row">
+            <button id="btn-sound" class="icon-btn round sound-toggle"></button>
+            <button id="btn-howto" class="icon-btn round" data-icon="help" data-i18n-aria="howToPlay"></button>
+            <button class="icon-btn round lang-toggle"></button>
+            <button id="btn-backup" class="icon-btn round" data-icon="backup" data-i18n-aria="backup"></button>
           </div>
         </div>
       </section>
@@ -161,6 +172,7 @@
       <section id="stages-screen" class="overlay hidden">
         <div class="panel">
           <h2 data-i18n="stageSelect">Stages</h2>
+          <p id="stages-lives" class="notice hidden"></p>
           <div id="stage-grid"></div>
           <h3 class="secret-title" data-i18n="secretStages">Secret stages</h3>
           <div id="secret-grid"></div>
@@ -206,18 +218,21 @@
 
       <!-- 일시정지 -->
       <section id="pause-screen" class="overlay hidden">
-        <div class="panel">
+        <div class="panel menu">
+          <p id="pause-stage" class="stage-no"></p>
           <h2 data-i18n="paused">Paused</h2>
-          <button id="btn-resume" class="primary" data-i18n="resume">Resume</button>
-          <button id="btn-restart" class="ghost" data-i18n="restartStage"></button>
-          <button id="btn-howto2" class="ghost" data-i18n="howToPlay"></button>
-          <button id="btn-quit" class="ghost" data-i18n="quitToTitle"></button>
-          <div class="row">
-            <button id="btn-sound2" class="ghost small"></button>
-          </div>
-          <div class="lang-switch" role="group" data-i18n-aria="language">
-            <button class="lang-btn" data-lang="en">English</button>
-            <button class="lang-btn" data-lang="ko">한국어</button>
+          <button id="btn-resume" class="primary with-icon"><i data-icon="play"></i><span data-i18n="resume"></span></button>
+          <button id="btn-restart" class="ghost with-icon">
+            <i data-icon="restart"></i><span data-i18n="restartStage"></span><span class="cost"></span>
+          </button>
+          <button id="btn-quit" class="ghost with-icon">
+            <i data-icon="home"></i><span data-i18n="quitToMenu"></span><span class="cost"></span>
+          </button>
+          <p id="pause-note" class="tag small"></p>
+          <div class="icon-row">
+            <button id="btn-sound2" class="icon-btn round sound-toggle"></button>
+            <button id="btn-howto2" class="icon-btn round" data-icon="help" data-i18n-aria="howToPlay"></button>
+            <button class="icon-btn round lang-toggle"></button>
           </div>
         </div>
       </section>
