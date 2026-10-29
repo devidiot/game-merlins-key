@@ -1,0 +1,5 @@
+# 개인용 게임이라 모든 크롤러의 수집을 막는다.
+# GitHub Pages 의 하위 경로에서는 이 파일이 적용되지 않으므로
+# index.html 의 <meta name="robots"> 가 실제로 막는 역할을 한다.
+User-agent: *
+Disallow: /
