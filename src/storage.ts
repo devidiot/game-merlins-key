@@ -9,6 +9,7 @@
  */
 
 import { BASE_LIFE_CAP, MAX_LIVES } from './lives.ts';
+import { bonusRuneCount, runeBonusSteps } from './progression.ts';
 
 const STORAGE_KEY = 'merlins-key:v2';
 /** 이름 기능이 생기기 전의 기록. 처음 등록하는 이름이 이어받는다. */
@@ -39,6 +40,8 @@ export interface Profile {
   lives: number;
   /** 생명 충전 시계의 기준 시각 (서버 기준 ms) */
   livesAt: number;
+  /** 룬 보너스 생명을 이미 받은 단계 수. 같은 보너스를 두 번 주지 않으려고 적는다 */
+  runeLifeSteps: number;
   /**
    * 스테이지를 10초 넘게 하는 중인지. 그 상태로 앱을 닫으면 다음에 열 때
    * 생명 하나를 뺀다. 메뉴로 나갈 때와 같은 규칙을 앱을 꺼서 피하지 못하게 한다.
@@ -81,6 +84,7 @@ export function newProfile(name: string, now: number): Profile {
     openedAt: [now],
     lives: BASE_LIFE_CAP,
     livesAt: now,
+    runeLifeSteps: 0,
     isMidStage: false,
   };
 }
@@ -92,19 +96,29 @@ export function sanitizeProfile(raw: unknown, fallbackNow: number): Profile | nu
   if (typeof d.name !== 'string' || !d.name) return null;
   const createdAt = Number.isFinite(d.createdAt) ? Number(d.createdAt) : fallbackNow;
   const openedAt = Array.isArray(d.openedAt) ? d.openedAt.filter(Number.isFinite) : [];
+  const runes = ints(d.runes);
+  const clearedAt = times(d.clearedAt);
+  const runeAt = times(d.runeAt);
   return {
     name: d.name,
     createdAt,
     unlocked: Number.isInteger(d.unlocked) ? Math.max(0, Number(d.unlocked)) : 0,
     best: Number.isFinite(d.best) ? Number(d.best) : 0,
-    runes: ints(d.runes),
+    runes,
     secretsCleared: ints(d.secretsCleared),
-    clearedAt: times(d.clearedAt),
-    runeAt: times(d.runeAt),
+    clearedAt,
+    runeAt,
     openedAt: openedAt.length ? openedAt : [createdAt],
-    // 생명이 생기기 전 기록은 가득 찬 채로 시작한다
-    lives: Number.isInteger(d.lives) ? Math.min(MAX_LIVES, Math.max(0, Number(d.lives))) : BASE_LIFE_CAP,
+    // 생명이 생기기 전 기록은 가득 찬 채로 시작한다. 예전 규칙은 룬 보너스로 시간 충전 상한을
+    // 올렸으므로, 그 규칙의 기록(runeLifeSteps 가 없다)은 5개를 넘은 몫을 덜어 낸다.
+    lives: Number.isInteger(d.lives)
+      ? Math.min(Number.isInteger(d.runeLifeSteps) ? MAX_LIVES : BASE_LIFE_CAP, Math.max(0, Number(d.lives)))
+      : BASE_LIFE_CAP,
     livesAt: Number.isFinite(d.livesAt) ? Number(d.livesAt) : fallbackNow,
+    // 이 값이 없던 기록은 예전 규칙(최대 생명 증가)으로 이미 보너스를 누렸으니 지금까지 몫은 받은 것으로 친다
+    runeLifeSteps: Number.isInteger(d.runeLifeSteps)
+      ? Math.max(0, Number(d.runeLifeSteps))
+      : runeBonusSteps(bonusRuneCount({ runes, runeAt, clearedAt })),
     isMidStage: d.isMidStage === true,
   };
 }
@@ -195,6 +209,7 @@ export function selectProfile(name: string, now: number): Profile {
       // 예전 기록에는 시각이 없으니 지금 깬 것으로 친다
       for (let n = 0; n < legacy.unlocked; n++) p.clearedAt[n] = now;
       for (const n of legacy.runes) p.runeAt[n] = now;
+      p.runeLifeSteps = runeBonusSteps(bonusRuneCount(p));
       legacy = null;
       try {
         localStorage.removeItem(LEGACY_KEY);

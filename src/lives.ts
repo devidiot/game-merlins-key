@@ -2,9 +2,9 @@
  * 생명 규칙. 화면을 모르는 순수 계산이라 Node 에서도 시험할 수 있다.
  *
  * - 생명은 프로필에 저장되며 게임을 껐다 켜도 이어진다.
- * - 상한(기본 5개, 룬 보너스만큼 더)보다 적으면 2시간마다 1개씩 찬다.
- *   상한에 닿으면 더 차지 않는다.
- * - 요정을 잡으면 상한을 넘어서도 늘어난다 (MAX_LIVES 까지).
+ * - 5개보다 적으면 2시간마다 1개씩 찬다. 5개에 닿으면 더 차지 않는다.
+ * - 요정과 룬 보너스로는 5개를 넘어서도 늘어난다 (MAX_LIVES 까지).
+ *   5개를 넘은 동안에는 시간이 흘러도 늘지 않는다.
  * - 충전 시계는 상한 아래로 떨어진 순간부터 돈다. 그래서 생명을 쓰기 전에는
  *   반드시 refillLives 로 시계를 맞춘다 (spendLife 가 대신 해 준다).
  *
@@ -40,10 +40,10 @@ export function spendLife(p: Profile, cap: number, now: number): void {
   p.lives = Math.max(0, p.lives - 1);
 }
 
-/** 요정 등으로 생명을 얻는다. 상한은 넘을 수 있지만 MAX_LIVES 는 못 넘는다. */
-export function gainLife(p: Profile, cap: number, now: number): void {
+/** 요정·룬 보너스로 생명을 얻는다. 상한은 넘을 수 있지만 MAX_LIVES 는 못 넘는다. */
+export function gainLife(p: Profile, cap: number, now: number, count = 1): void {
   refillLives(p, cap, now);
-  p.lives = Math.min(MAX_LIVES, p.lives + 1);
+  p.lives = Math.min(MAX_LIVES, p.lives + count);
   if (p.lives >= cap) p.livesAt = now;
 }
 

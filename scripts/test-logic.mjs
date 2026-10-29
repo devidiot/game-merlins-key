@@ -1,5 +1,5 @@
 /**
- * 화면과 상관없는 규칙(이름, 공개 일정, 생명, 백업 코드)을 시험한다.
+ * 화면과 상관없는 규칙(이름, 공개 일정, 생명, 룬 보너스, 백업 코드)을 시험한다.
  *
  *   node scripts/test-logic.mjs
  */
@@ -9,6 +9,7 @@ import { applyReleases, BATCHES, DAY_MS, lastOpenStage, nextRelease } from '../s
 import { encodeBackup, decodeBackup } from '../src/backup.ts';
 import { newProfile, sanitizeProfile } from '../src/storage.ts';
 import { gainLife, LIFE_REFILL_MS, MAX_LIVES, nextLifeAt, refillLives, spendLife } from '../src/lives.ts';
+import { bonusRuneCount, runeBonusSteps, startingFire } from '../src/progression.ts';
 
 let count = 0;
 const test = async (name, fn) => {
@@ -219,6 +220,47 @@ await test('생명: 생명이 없던 예전 기록은 가득 찬 채로 읽는�
   assert.equal(p.isMidStage, false);
 });
 
+await test('생명: 룬 보너스처럼 여러 개를 한 번에 얻어도 시간으로는 5개를 넘지 않는다', () => {
+  const p = newProfile('a', T0);
+  spendLife(p, 5, T0);
+  gainLife(p, 5, T0 + HOUR, 2);
+  assert.equal(p.lives, 6);
+  assert.equal(nextLifeAt(p, 5), null);
+  refillLives(p, 5, T0 + 100 * HOUR);
+  assert.equal(p.lives, 6);
+});
+
+// ---------------------------------------------------------------- 룬 보너스
+
+await test('룬 보너스: 처음 깰 때 얻은 룬만 센다', () => {
+  const p = newProfile('a', T0);
+  clearUpTo(p, 9, T0);
+  collectRunes(p, 0, 8, T0); // 처음 깰 때 함께 얻었다
+  collectRunes(p, 9, 9, T0 + HOUR); // 깬 뒤에 다시 들어가 얻었다
+  assert.equal(p.runes.length, 10);
+  assert.equal(bonusRuneCount(p), 9);
+  assert.equal(runeBonusSteps(bonusRuneCount(p)), 0);
+});
+
+await test('룬 보너스: 10개마다 시작 불꽃 +2, 최대 5개', () => {
+  assert.equal(startingFire(9), 0);
+  assert.equal(startingFire(10), 2);
+  assert.equal(startingFire(20), 4);
+  assert.equal(startingFire(30), 5);
+});
+
+await test('룬 보너스: 받은 단계 수가 없던 예전 기록은 지금까지 몫을 받은 것으로 친다', () => {
+  const old = newProfile('a', T0);
+  clearUpTo(old, 24, T0);
+  collectRunes(old, 0, 24, T0);
+  old.lives = 10;
+  delete old.runeLifeSteps;
+  const p = sanitizeProfile(old, T0);
+  assert.equal(p.runeLifeSteps, 2);
+  // 예전 규칙으로 올라간 상한까지 찼던 생명은 5개로 돌린다
+  assert.equal(p.lives, 5);
+});
+
 // ---------------------------------------------------------------- 백업 코드
 
 await test('백업: 코드로 바꿨다가 되돌리면 같은 기록', async () => {
@@ -250,4 +292,4 @@ await test('백업: 글자가 바뀌거나 형식이 틀리면 거절', async ()
   assert.equal((await decodeBackup('MK1..00000000', T0)).error, 'format');
 });
 
-console.log(`규칙 시험 ${count}개 통과 (이름, 공개 일정, 생명, 백업 코드)`);
+console.log(`규칙 시험 ${count}개 통과 (이름, 공개 일정, 생명, 룬 보너스, 백업 코드)`);

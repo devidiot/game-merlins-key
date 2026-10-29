@@ -29,11 +29,13 @@ import {
   chapterRunes,
   isSecretUnlocked,
   isTrueEnding,
-  lifeCap,
-  runeBonus,
+  bonusRuneCount,
+  LIVES_PER_BONUS,
+  RUNES_PER_BONUS,
+  runeBonusSteps,
   startingFire,
 } from './progression.ts';
-import { gainLife, nextLifeAt, refillLives, spendLife } from './lives.ts';
+import { BASE_LIFE_CAP, gainLife, nextLifeAt, refillLives, spendLife } from './lives.ts';
 import {
   FLAME,
   FLAME_EMPTY,
@@ -153,8 +155,11 @@ function goTitle(): void {
 /** 지금 할 수 있는 가장 뒤 스테이지 (공개 범위와 만든 스테이지 수 안에서) */
 const playableLast = (): number => Math.min(lastOpenStage(progress), LEVELS.length - 1);
 
-/** 생명 상한 (기본 5개에 룬 보너스를 더한다) */
-const cap = (): number => lifeCap(progress.runes.length);
+/** 시간으로 차는 생명의 상한. 룬 보너스와 요정으로 얻은 생명은 이 값을 넘을 수 있다 */
+const cap = (): number => BASE_LIFE_CAP;
+
+/** 처음 깨는 스테이지에 들어갈 때 종이 나타날 확률 */
+const BELL_CHANCE = 0.08;
 
 /** 흐른 시간만큼 생명을 채운다 */
 function refreshLives(): void {
@@ -196,9 +201,12 @@ function refreshTitle(): void {
   const nextLife = nextLifeAt(progress, cap());
   $('title-life-timer').textContent =
     nextLife === null ? t('livesFull') : t('lifeTimer', { time: formatLeft(nextLife - stampNow()) });
-  const bonus = runeBonus(progress.runes.length);
-  $('title-bonus').textContent = t('runeBonus', { n: bonus.lives });
-  $('title-bonus').classList.toggle('hidden', bonus.lives === 0);
+  const bonusRunes = bonusRuneCount(progress);
+  $('title-bonus').textContent = t('runeBonus', {
+    fire: startingFire(bonusRunes),
+    left: RUNES_PER_BONUS - (bonusRunes % RUNES_PER_BONUS),
+  });
+  $('title-bonus').classList.toggle('hidden', bonusRunes === 0);
   $('title-browser-warning').classList.toggle('hidden', !shouldSuggestInstall());
   refreshPlayButton();
   const release = titleNotice ?? releaseLines();
@@ -275,15 +283,18 @@ function startGame(ref: StageRef): void {
     return;
   }
   titleNotice = null;
-  // 룬 10개마다 불꽃을 하나씩 더 들고 시작한다
-  session = { score: 0, lives: progress.lives, fire: startingFire(progress.runes.length) };
+  // 처음 깬 스테이지에서 얻은 룬 10개마다 불꽃을 2개씩 더 들고 시작한다
+  session = { score: 0, lives: progress.lives, fire: startingFire(bonusRuneCount(progress)) };
   current = ref;
   showIntro();
 }
 
 function showIntro(): void {
   session.lives = progress.lives;
-  world = new World(levelOf(current), session);
+  const isCleared = current.isSecret
+    ? progress.secretsCleared.includes(current.index)
+    : progress.clearedAt[current.index] !== undefined;
+  world = new World(levelOf(current), session, { hasBell: !isCleared && Math.random() < BELL_CHANCE });
   screen = 'intro';
   playFrames = 0;
   controls.reset();
@@ -372,14 +383,18 @@ function stageClear(): void {
     const now = stampNow();
     progress.clearedAt[stage] ??= now;
     if (world.hasRune && !progress.runes.includes(stage)) {
-      const before = runeBonus(progress.runes.length);
       const chapter = chapterOf(stage);
       const wasOpen = isSecretUnlocked(chapter, progress.runes);
       progress.runes.push(stage);
+      // 처음 깬 것이면 clearedAt 과 같은 시각이 들어가 보너스 룬으로 센다
       progress.runeAt[stage] = now;
       if (!wasOpen && isSecretUnlocked(chapter, progress.runes)) notes.push(t('secretUnlocked', { n: chapter + 1 }));
-      const after = runeBonus(progress.runes.length);
-      if (after.lives > before.lives) notes.push(t('runeBonusUp', { n: after.lives }));
+      const steps = runeBonusSteps(bonusRuneCount(progress));
+      if (steps > progress.runeLifeSteps) {
+        gainLife(progress, cap(), now, (steps - progress.runeLifeSteps) * LIVES_PER_BONUS);
+        progress.runeLifeSteps = steps;
+        notes.push(t('runeBonusUp', { lives: LIVES_PER_BONUS, fire: startingFire(bonusRuneCount(progress)) }));
+      }
     }
     // 마지막 스테이지를 깨도 자르지 않고 그대로 적는다. 나중에 스테이지가 늘면
     // 바로 다음 스테이지부터 이어서 할 수 있어야 하기 때문이다.

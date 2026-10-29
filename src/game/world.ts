@@ -234,11 +234,16 @@ export class World {
 
   private events: GameEvent[] = [];
 
-  constructor(level: LevelDef, session: Session) {
+  /**
+   * @param options.hasBell 종을 하나 둘지. 종은 맵에 고정하지 않고, 둘 때마다 발판 위 빈칸
+   *   하나를 무작위로 고른다. 맵의 `b`·`4` 는 예전 기록과 맞추려고 남긴 글자라 무시한다.
+   */
+  constructor(level: LevelDef, session: Session, options: { hasBell?: boolean; random?: () => number } = {}) {
     this.level = level;
     this.session = session;
     this.timeLeft = this.level.time * 60;
     this.load();
+    if (options.hasBell) this.placeBell(options.random ?? Math.random);
   }
 
   // ---------------------------------------------------------------- 불러오기
@@ -260,9 +265,9 @@ export class World {
         } else if (ch === 'o' || ch in HIDDEN_ITEMS) {
           this.tiles[i] = STONE;
           this.hp[i] = 2;
-          if (ch in HIDDEN_ITEMS) this.hidden[i] = HIDDEN_ITEMS[ch];
+          if (ch in HIDDEN_ITEMS && HIDDEN_ITEMS[ch] !== 'bell') this.hidden[i] = HIDDEN_ITEMS[ch];
         } else if (ch in VISIBLE_ITEMS) {
-          this.items.push({ kind: VISIBLE_ITEMS[ch], tx, ty, pop: 0 });
+          if (VISIBLE_ITEMS[ch] !== 'bell') this.items.push({ kind: VISIBLE_ITEMS[ch], tx, ty, pop: 0 });
         } else if (ch === 'P') {
           start = { tx, ty };
         } else if (ch === 'D') {
@@ -364,6 +369,22 @@ export class World {
     // 시작하자마자 쏘지 않도록 여유를 준다
     e.timer = TURRET_INTERVAL + 60;
     this.enemies.push(e);
+  }
+
+  /** 발판(벽·돌 블록) 바로 위 빈칸 하나에 종을 둔다 */
+  private placeBell(random: () => number): void {
+    const spots: { tx: number; ty: number }[] = [];
+    this.level.map.forEach((row, ly) => {
+      for (let lx = 0; lx < LEVEL_COLS; lx++) {
+        if (row[lx] !== '.') continue;
+        const tx = lx + 1;
+        const ty = ly + 1;
+        if (this.tiles[(ty + 1) * GRID_W + tx] !== EMPTY) spots.push({ tx, ty });
+      }
+    });
+    if (!spots.length) return;
+    const { tx, ty } = spots[Math.floor(random() * spots.length)];
+    this.items.push({ kind: 'bell', tx, ty, pop: 0 });
   }
 
   // ---------------------------------------------------------------- 격자 도구
