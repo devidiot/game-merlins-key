@@ -2,7 +2,7 @@
  * 스테이지마다 실제로 깰 수 있는지 탐색으로 확인한다.
  *
  *   node scripts/solve-levels.mjs        모든 스테이지
- *   node scripts/solve-levels.mjs 4 7 S2 고른 스테이지만 (비밀 스테이지는 S1~S5)
+ *   node scripts/solve-levels.mjs 4 7 S2 고른 스테이지만 (비밀 스테이지는 S1, S2, …)
  *   node scripts/solve-levels.mjs 4 --save   찾은 길을 routes.json 에 저장
  *   node scripts/solve-levels.mjs 4 --seed   routes.json 의 기존 길을 출발점으로 삼아 탐색
  *   NODE_LIMIT=300000 GOAL_WEIGHT=0.8 node scripts/solve-levels.mjs 4   탐색 폭 조절
@@ -355,7 +355,7 @@ function saveRoute(id, route) {
 
 const picked = process.argv.slice(2).filter((a) => !a.startsWith('--')).map(stageById);
 if (picked.includes(undefined)) {
-  console.error('스테이지 번호는 1~50 또는 S1~S5 로 적으세요.');
+  console.error(`스테이지 번호는 1~${LEVELS.length} 또는 S1~S${SECRET_LEVELS.length} 로 적으세요.`);
   process.exit(1);
 }
 let isFailed = false;
