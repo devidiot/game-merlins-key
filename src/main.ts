@@ -577,7 +577,7 @@ function releaseLines(): string[] {
   return lines;
 }
 
-/** 새로 열린 묶음 알림. 31~50 이 열릴 때는 매주 공개된다는 안내를 붙인다. */
+/** 새로 열린 묶음 알림. 31~50 이 열릴 때는 3일마다 공개된다는 안내를 붙인다. */
 function openedNotes(openedBefore: number): string[] {
   const notes: string[] = [];
   for (let b = openedBefore; b < progress.openedAt.length; b++) {

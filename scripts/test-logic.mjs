@@ -76,16 +76,16 @@ await test('공개: 처음에는 30까지, 30을 깨면 즉시 50까지', () => 
   assert.equal(p.openedAt[1], T0 + 2 * DAY_MS);
 });
 
-await test('공개: 50까지 깨고 7일이 지나야 51~70', () => {
+await test('공개: 50까지 깨고 3일이 지나야 51~70', () => {
   const p = newProfile('a', T0);
   clearUpTo(p, 29, T0);
   applyReleases(p, T0);
   clearUpTo(p, 49, T0 + DAY_MS);
-  assert.equal(applyReleases(p, T0 + 6 * DAY_MS), false);
-  assert.equal(nextRelease(p).earliestAt, T0 + 7 * DAY_MS);
-  assert.equal(applyReleases(p, T0 + 7 * DAY_MS), true);
+  assert.equal(applyReleases(p, T0 + 3 * DAY_MS - 1), false);
+  assert.equal(nextRelease(p).earliestAt, T0 + 3 * DAY_MS);
+  assert.equal(applyReleases(p, T0 + 3 * DAY_MS), true);
   assert.equal(lastOpenStage(p), 69);
-  assert.equal(p.openedAt[2], T0 + 7 * DAY_MS);
+  assert.equal(p.openedAt[2], T0 + 3 * DAY_MS);
 });
 
 await test('공개: 쉬는 동안 묶음이 쌓이지 않는다', () => {
@@ -100,36 +100,36 @@ await test('공개: 쉬는 동안 묶음이 쌓이지 않는다', () => {
   applyReleases(p, T0 + 30 * DAY_MS);
   assert.equal(lastOpenStage(p), 69);
   assert.equal(p.openedAt[2], T0 + 30 * DAY_MS);
-  // 그다음 묶음은 그때부터 다시 7일
+  // 그다음 묶음은 그때부터 다시 3일
   clearUpTo(p, 69, T0 + 31 * DAY_MS);
-  assert.equal(applyReleases(p, T0 + 36 * DAY_MS), false);
-  assert.equal(applyReleases(p, T0 + 37 * DAY_MS), true);
+  assert.equal(applyReleases(p, T0 + 33 * DAY_MS - 1), false);
+  assert.equal(applyReleases(p, T0 + 33 * DAY_MS), true);
   assert.equal(lastOpenStage(p), 89);
 });
 
-await test('공개: 최근 묶음 룬을 3일 안에 다 모으면 4일째 공개', () => {
+await test('공개: 최근 묶음 룬을 1일 안에 다 모으면 이튿날 공개', () => {
   const p = newProfile('a', T0);
   clearUpTo(p, 29, T0);
   applyReleases(p, T0);
   clearUpTo(p, 49, T0 + DAY_MS);
-  collectRunes(p, 30, 49, T0 + DAY_MS);
+  collectRunes(p, 30, 49, T0 + DAY_MS / 2);
   const next = nextRelease(p);
   assert.equal(next.hasRuneBonus, true);
-  assert.equal(next.earliestAt, T0 + 3 * DAY_MS);
-  assert.equal(applyReleases(p, T0 + 3 * DAY_MS - 1), false);
-  assert.equal(applyReleases(p, T0 + 3 * DAY_MS), true);
+  assert.equal(next.earliestAt, T0 + DAY_MS);
+  assert.equal(applyReleases(p, T0 + DAY_MS - 1), false);
+  assert.equal(applyReleases(p, T0 + DAY_MS), true);
 });
 
-await test('공개: 3~7일 사이에 룬을 다 모으면 그 순간 공개', () => {
+await test('공개: 1~3일 사이에 룬을 다 모으면 그 순간 공개', () => {
   const p = newProfile('a', T0);
   clearUpTo(p, 29, T0);
   applyReleases(p, T0);
   clearUpTo(p, 49, T0 + DAY_MS);
   collectRunes(p, 30, 48, T0 + DAY_MS);
-  assert.equal(applyReleases(p, T0 + 5 * DAY_MS), false);
-  collectRunes(p, 49, 49, T0 + 5 * DAY_MS);
-  assert.equal(applyReleases(p, T0 + 5 * DAY_MS), true);
-  assert.equal(p.openedAt[2], T0 + 5 * DAY_MS);
+  assert.equal(applyReleases(p, T0 + 2 * DAY_MS), false);
+  collectRunes(p, 49, 49, T0 + 2 * DAY_MS);
+  assert.equal(applyReleases(p, T0 + 2 * DAY_MS), true);
+  assert.equal(p.openedAt[2], T0 + 2 * DAY_MS);
 });
 
 await test('공개: 앞 묶음의 룬은 보상 조건에 들지 않는다', () => {

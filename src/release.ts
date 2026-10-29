@@ -8,8 +8,8 @@
  *
  * 둘째 묶음부터 다음 묶음이 열리려면 두 조건을 모두 채워야 한다.
  * 1. 지금 열린 묶음을 끝까지 깼을 것
- * 2. 지금 묶음이 열린 지 7일이 지났을 것. 그 묶음의 룬을 모두 모았으면 3일.
- *    (3일이 지난 뒤에 룬을 다 모았다면 다 모은 순간)
+ * 2. 지금 묶음이 열린 지 3일이 지났을 것. 그 묶음의 룬을 모두 모았으면 1일.
+ *    (1일이 지난 뒤에 룬을 다 모았다면 다 모은 순간)
  *
  * 쉬는 동안 묶음이 쌓이지 않는다. 한 달을 쉬어도 다음 묶음 하나만 "지금 묶음을
  * 다 깨면 바로 열리는" 상태로 기다린다.
@@ -19,8 +19,8 @@
 import type { Profile } from './storage.ts';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
-export const NORMAL_WAIT_MS = 7 * DAY_MS;
-export const RUNE_WAIT_MS = 3 * DAY_MS;
+export const NORMAL_WAIT_MS = 3 * DAY_MS;
+export const RUNE_WAIT_MS = 1 * DAY_MS;
 /** 계획한 전체 스테이지 수. 아직 만들지 않은 묶음은 "준비 중"으로 보여 준다. */
 export const PLANNED_STAGES = 200;
 const FIRST_BATCH = 30;
@@ -59,7 +59,7 @@ export interface NextRelease {
   batch: number;
   /** 지금 묶음을 다 깨면 열리는 가장 이른 시각. 첫 묶음 다음은 시간 조건이 없어서 null */
   earliestAt: number | null;
-  /** 룬을 다 모아서 3일로 앞당겨졌는지 */
+  /** 룬을 다 모아서 1일로 앞당겨졌는지 */
   hasRuneBonus: boolean;
   /** 룬을 다 모으면 열릴 시각 (아직 다 못 모았을 때 안내용) */
   runeBonusAt: number | null;
